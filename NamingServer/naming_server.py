@@ -7,40 +7,31 @@ from threading import Thread
 CHUNK_SIZE = 4096
 
 clients = []
-storage_servers = [("localhost", 8080), ("localhost", 8081)]
+storage_servers = [("localhost:8810", None),
+                   ("localhost:8815", None),
+                   ("localhost:8838", None)]
 content_table = {}
 
 
-# Thread to listen one particular client
-class ClientListener(Thread):
-    def __init__(self, name: str, sock: socket.socket):
+class StorageServerListener(Thread):
+    def __init__(self, sock):
         super().__init__(daemon=True)
         self.sock = sock
-        self.name = name
 
-    # add 'me> ' to sended message
-    def _clear_echo(self, data):
-        # \033[F – symbol to move the cursor at the beginning of current line (Ctrl+A)
-        # \033[K – symbol to clear everything till the end of current line (Ctrl+K)
-        self.sock.sendall('\033[F\033[K'.encode())
-        data = 'me> '.encode() + data
-        # send the message back to user
-        self.sock.sendall(data)
+    def run(self):
+        self.sock.recv(CHUNK_SIZE).decode().split("?")
 
-    # broadcast the message with name prefix eg: 'u1> '
-    def _broadcast(self, data):
-        data = (self.name + '> ').encode() + data
-        for u in clients:
-            # send to everyone except current client
-            if u == self.sock:
-                continue
-            u.sendall(data)
+        # Thread to listen one particular client
 
-    # clean up
-    def _close(self):
+
+class ClientListener(Thread):
+    def __init__(self, sock):
+        super().__init__(daemon=True)
+        self.sock = sock
+
+    def close(self):
         clients.remove(self.sock)
         self.sock.close()
-        print(self.name + ' disconnected')
 
     def handle_filename_collision(self, filename):
         base, ext = os.path.splitext(filename)
@@ -53,14 +44,27 @@ class ClientListener(Thread):
 
     def run(self):
         received = self.sock.recv(CHUNK_SIZE).decode()
-        filename, filesize = received.split(" ")
+        action, filename, filesize = received.split("?")
         filename = os.path.basename(filename)
         filename = self.handle_filename_collision(filename)
         filesize = int(filesize)
 
-        storage_server = random.choice(storage_servers)
-        content_table[filename] = [storage_server]
-        self.sock.send(f"{storage_server[0]}:{storage_server[1]}".encode())
+        print(clients)
+
+        if action == "read":
+            if filename in content_table:
+                address = random.choice(content_table[filename])
+                self.sock.send(f"{address[0]}:{address[1]}".encode())
+        elif action == "write":
+            client = random.choice(clients)
+            if client:
+                peer = random.choice(clients).getpeername()
+                addr = f'{peer[0]}:{peer[1]}'
+                content_table[filename] = [addr]
+                self.sock.send(addr.encode())
+
+        print(content_table)
+        self.close()
 
         # contents = ""
         # while True:
@@ -69,34 +73,28 @@ class ClientListener(Thread):
         #     content = self.sock.recv(CHUNK_SIZE)
         #     if not content:
         #         # if we got no data – client has disconnected
-        #         self._close()
-        #         # finish the thread
-        #         return
-
-        # with open(filename, "wb") as file:
-        #     file.write(contents)
 
 
 def main():
-    next_name = 1
+    types = [[8800, clients, ], [8801, storage_servers]]
+    for t in types:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        t.append(sock)
 
-    # AF_INET – IPv4, SOCK_STREAM – TCP
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # reuse address; in OS address will be reserved after app closed for a while
-    # so if we close and imidiatly start server again – we'll get error
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    # listen to all interfaces at 8800 port
-    sock.bind(('', 8800))
-    sock.listen()
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(('', t[0]))
+        sock.listen()
+
+    t = types[0]
     while True:
-        # blocking call, waiting for new client to connect
-        con, addr = sock.accept()
-        clients.append(con)
-        name = 'u' + str(next_name)
-        next_name += 1
-        print(str(addr) + ' connected as ' + name)
-        # start new thread to deal with client
-        ClientListener(name, con).start()
+        # for t in types:
+        con, _ = t[2].accept()
+        t[1].append(con)
+
+        if t[0] == 8800:
+            ClientListener(con).start()
+        else:
+            StorageServerListener(con).start()
 
 
 if __name__ == "__main__":

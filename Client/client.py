@@ -5,7 +5,7 @@ import os
 
 CHUNK_SIZE = 4096
 
-filename, ip, port = sys.argv[1:4]
+action, filename, ip, port = sys.argv[1:5]
 port = int(port)
 filesize = os.path.getsize(filename)
 
@@ -14,7 +14,7 @@ socket = socket.socket()
 print(f"Connecting to {ip}:{port}...")
 socket.connect((ip, port))
 print("Connected.")
-socket.send(f"{filename} {filesize}".encode())
+socket.send(f"{action}?{filename}?{filesize}".encode())
 
 storage_server = socket.recv(CHUNK_SIZE).decode()
 print("storage_server", storage_server)
@@ -32,7 +32,6 @@ print("storage_server", storage_server)
 
 #         socket.sendall(content)
 #         progress.update(len(content))
-
 
 socket.close()
 # print("Successfully sent.")
