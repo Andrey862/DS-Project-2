@@ -5,7 +5,41 @@ import time
 import os
 
 connection_to_nn = None
-content_table = {1: [1, False]}
+
+
+class ContentTable():
+    content_table__ = {1: [1, False]}
+
+    @classmethod
+    def get(cls, chank):
+        if (chank in cls.content_table__):
+            v = cls.content_table__[chank]
+            return {'ver': v[0], 'del': v[1]}
+        else:
+            return {'ver': -1, 'del': True}
+
+    @classmethod
+    def has(cls, chank, ver):
+        return cls.get(chank)['ver'] == ver and not cls.get(chank)['del']
+
+    @classmethod
+    def set(cls, chank, ver, del_):
+        print(f'set {chank} {ver} {del_}')
+        if (chank in cls.content_table__):
+            v = cls.content_table__[chank]
+            if (v[0] > ver):
+                raise Exception("new update is older than current")
+        cls.content_table__[chank] = [ver, del_]
+
+    @classmethod
+    def save_json(cls):
+        pass
+
+    @classmethod
+    def load_json(cls):
+        pass
+
+
 dn_status_table = None
 
 dn_client_port = 10005
@@ -40,14 +74,15 @@ class ClientServer(Thread):
         return word[:-1]
 
     def read(self, chank, version):
-        if (chank in content_table and content_table[chank][0] == version and not content_table[chank][1]):
+        if (ContentTable.has(chank, version)):
             with open(get_chank_name(chank), 'rb') as f:
                 self.sock.sendall(f.read())
         else:
             self.sock.sendall(b'No data\n')
 
     def write(self, chank, version, deleted, length):
-        if (chank not in content_table or content_table[chank][0] <= version):
+
+        if (ContentTable.get(chank)['ver'] < version):
             self.sock.sendall(b'ACK\n')
         else:
             self.sock.sendall(b'Too old\n')
@@ -66,7 +101,7 @@ class ClientServer(Thread):
                 f.write(content)
             self.sock.sendall(b'ACK\n')
 
-        content_table[chank] = [version, deleted]
+        ContentTable.set(chank, ver=version, del_=deleted)
 
     def serve(self):
         command = self.recv_word()
@@ -88,7 +123,7 @@ class ClientServer(Thread):
         try:
             self.serve()
         except Exception as e:
-            self.sock.sendall(b'Error! '+str(e).encode('UTF-8')+b'\n')
+            self.sock.sendall(b'Error! '+repr(e).encode('UTF-8')+b'\n')
         self.sock.close()
         print(f'serverd {self.addr}')
 
@@ -151,6 +186,9 @@ class DNPusher(Thread):
 if __name__ == "__main__":
     # connect_to_nn()
     # init_global_variables
+    # read existing files
+    # delete marked as del in content table
+    # update content table for missing values
     # read lab6 https://gist.github.com/gordinmitya/349f4abdc6b16dc163fa39b55544fd34
     # my solution to lab6 https://github.com/Andrey862/repo
     cl = ClientListener()
