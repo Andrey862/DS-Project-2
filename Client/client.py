@@ -16,19 +16,20 @@ def recv_word(sock):
 
 
 def send_chank_to_dn(dn_ip, chank, version, deleted, content, port=10005):
-    with socket.socket() as socket:
-        socket.connect((dn_ip, port))
+    with socket.socket() as s:
+        s.connect((dn_ip, port))
         d = {True: 't', False: 'f'}
-        socket.sendall(
+        s.sendall(
             f'write\n{chank}\n{version}\n{d[deleted]}\n{len(content)}\n'.encode('UTF-8'))
-        res = recv_word(socket)
-        if (res != 'ACK'):
-            print('fatal after sending params: '+res)
+        res = recv_word(s)
+        if (res != b'ACK'):
+            print('fatal after sending params: ', res)
             return res
-        socket.sendall(content)
-        res = recv_word(socket)
-        if (res != 'ACK'):
-            print('fatal during sending file: '+res)
+        if (not deleted):
+            s.sendall(content)
+        res = recv_word(s)
+        if (res != b'ACK'):
+            print('fatal during sending/deleting file: ', res)
             return res
 
 
