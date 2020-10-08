@@ -1,9 +1,9 @@
-import base64
 import socket
 from threading import Condition, Thread
 import time
 import os
-
+import tqdm
+import sys
 
 def recv_word(sock):
     word = b""
@@ -44,18 +44,35 @@ def read_chank_from_dn(dn_ip, chank, version, port=10005):
         return s.recv(5000)
 
 
-def ask_client():
-    pass
+CHUNK_SIZE = 4096
+
+action, filename, ip, port = sys.argv[1:5]
+port = int(port)
+filesize = os.path.getsize(filename)
 
 
-def send_request():
-    # also print % in terminal
-    pass
+socket = socket.socket()
+print(f"Connecting to {ip}:{port}...")
+socket.connect((ip, port))
+print("Connected.")
+socket.send(f"{action}?{filename}?{filesize}".encode())
+
+storage_server = socket.recv(CHUNK_SIZE).decode()
+print("storage_server", storage_server)
 
 
-if __name__ == "__main__":
-    while(True):
-        request = ask_client()
-        if (request == "exit"):
-            break
-        send_request(request)
+# progress = tqdm.tqdm(range(
+#     filesize), f"Sending {filename}...", unit="B", unit_scale=True, unit_divisor=1024)
+
+
+# with open(filename, "rb") as file:
+#     while True:
+#         content = file.read(1024)
+#         if not content:
+#             break
+
+#         socket.sendall(content)
+#         progress.update(len(content))
+
+socket.close()
+# print("Successfully sent.")
