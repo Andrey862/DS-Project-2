@@ -59,23 +59,26 @@ to_bool = {
 }
 
 
+def recv_word(sock):
+    word = b""
+    for _ in range(20):
+        rcv = sock.recv(1)
+        if rcv == b'\n':
+            break
+        word += rcv
+    return word
+
+
 class ClientServer(Thread):
     def __init__(self, sock: socket.socket, addr) -> None:
         super().__init__(daemon=True)
         self.sock = sock
         self.addr = addr
 
-    def recv_word(self):
-        word = b""
-        for _ in range(20):
-            word += self.sock.recv(1)
-            if word[-1] == b'\n'[0]:
-                break
-        return word[:-1]
-
     def read(self, chank, version):
         if (ContentTable.has(chank, version)):
             with open(get_chank_name(chank), 'rb') as f:
+                self.sock.sendall(b'ACK\n')
                 self.sock.sendall(f.read())
         else:
             self.sock.sendall(b'No data\n')
@@ -104,17 +107,17 @@ class ClientServer(Thread):
         ContentTable.set(chank, ver=version, del_=deleted)
 
     def serve(self):
-        command = self.recv_word()
+        command = recv_word(self.sock)
         print(command)
         if (command == b'read'):
-            chank = int(self.recv_word())
-            version = int(self.recv_word())
+            chank = int(recv_word(self.sock))
+            version = int(recv_word(self.sock))
             self.read(chank, version)
         elif (command == b'write'):
-            chank = int(self.recv_word())
-            version = int(self.recv_word())
-            deleted = to_bool[self.recv_word()]
-            length = int(self.recv_word())
+            chank = int(recv_word(self.sock))
+            version = int(recv_word(self.sock))
+            deleted = to_bool[recv_word(self.sock)]
+            length = int(recv_word(self.sock))
             self.write(chank, version, deleted, length)
         else:
             self.sock.sendall(b'unknown command "'+command+b'"\n')
@@ -124,6 +127,7 @@ class ClientServer(Thread):
             self.serve()
         except Exception as e:
             self.sock.sendall(b'Error! '+repr(e).encode('UTF-8')+b'\n')
+            print('error during serving client', e)
         self.sock.close()
         print(f'serverd {self.addr}')
 
