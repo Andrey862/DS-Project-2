@@ -48,19 +48,23 @@ def read_chank_from_dn(dn_ip, chank, version, port=10005):
 
 CHUNK_SIZE = 4096
 
-action, filename, ip, port = sys.argv[1:5]
+ip, port, action = sys.argv[1:4]
 port = int(port)
-filesize = os.path.getsize(filename)
-
 
 socket = socket.socket()
-print(f"Connecting to {ip}:{port}...")
 socket.connect((ip, port))
-print("Connected.")
-socket.send(f"{action}?{filename}?{filesize}".encode())
+
+if action == 'ls':
+    socket.send('ls'.encode())
+elif action == 'write':
+    filename = sys.argv[4]
+    filesize = os.path.getsize(filename)
+    socket.send(f"{action}?{filename}?{filesize}".encode())
+else:
+    socket.send(f"{action}?{sys.argv[4]}".encode())
 
 received = socket.recv(CHUNK_SIZE).decode()
-print("storage_server", received)
+print(received)
 
 
 # progress = tqdm.tqdm(range(

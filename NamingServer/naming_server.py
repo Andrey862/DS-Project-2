@@ -19,11 +19,10 @@ storage_servers = ["localhost:8810",
 
 filesystem = {}
 chunks = {}
-current_dir = filesystem
+current_file = filesystem
 
 
 class BackupDaemon(Thread):
-
     def remove_circular_reference(self, fs):
         if type(fs) is dict:
             fs.pop('..', None)
@@ -131,41 +130,46 @@ class ClientListener(Thread):
         self.sock.sendall(json.dumps(
             fl['chunks'], indent=4).encode())
 
-    def empty_dir(self, dir):
-        for k in list(dir.keys()):
-            if 'chunks' in dir[k]:
-                for cid in dir['chunks']:
-                    chunks[cid]['del'] = True
-            else:
-                self.empty_dir(dir[k])
+    def delete(self, filename):
+        if 'chunks' in filename:
+            for cid in filename['chunks']:
+                chunks[cid]['del'] = True
+        else:
+            for k in list(filename.keys()):
+                self.delete(filename[k])
+
+    def ls(self):
+        ls = ""
+        for k in list(current_file.keys()):
+            ls += k
+            if 'size' in current_file[k]:
+                ls += ' - ' + str(current_file[k]['size'])
+            ls += '\n'
+        self.sock.sendall(ls.encode())
 
     def run(self):
+        global current_file
         args = self.sock.recv(CHUNK_SIZE).decode().split("?")
 
         if args[0] == 'write':
             self.write(args[1], int(args[2]))
         elif args[0] == 'ls':
-            ls = ""
-            for k in list(dir.keys()):
-                ls += k
-                if 'size' in dir[k]:
-                    ls += ' - ' + str(dir[k]['size'])
-                ls += '\n'
-            self.sock.sendall(ls.encode())
+            self.ls()
         elif args[0] == 'cd':
-            if args[1] in current_dir:
-                current_dir = current_dir[args[1]]
+            if args[1] in current_file:
+                current_file = current_file[args[1]]
             else:
                 self.sock.sendall("Directory not found".encode())
         elif args[0] == 'mkdir':
-            if args[1] not in current_dir:
-                current_dir[args[1]] = {}
+            if args[1] not in current_file:
+                current_file[args[1]] = {}
         elif args[0] == 'rm':
-            if args[1] in current_dir:
-                self.empty_dir(current_dir[args[1]])
-                del current_dir[args[1]]
+            if args[1] in current_file:
+                self.delete(current_file[args[1]])
+                del current_file[args[1]]
             else:
                 self.sock.sendall("Directory not found".encode())
+
         self.close()
 
 
