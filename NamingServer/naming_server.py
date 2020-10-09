@@ -163,7 +163,7 @@ class ClientListener(Thread):
         elif args[0] == 'rm':
             if args[1] in current_dir:
                 self.empty_dir(current_dir[args[1]])
-                del current_dir[args[1]]]
+                del current_dir[args[1]]
             else:
                 self.sock.sendall("Directory not found".encode())
         self.close()
