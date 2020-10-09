@@ -86,7 +86,7 @@ class ClientListener(Thread):
             for _ in range(math.ceil(filesize / CHUNK_SIZE)):
                 chunk_id = str(uuid.uuid4())
                 storage_server = random.choice(storage_servers)
-                chunk_location[chunk_id] = storage_server
+                chunk_location[chunk_id] = [storage_server]
 
                 chosen_storage_servers.append(storage_server)
                 chunk_ids.append(chunk_id)
