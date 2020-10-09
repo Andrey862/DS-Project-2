@@ -1,4 +1,6 @@
 import os
+import copy
+import time
 import math
 import tqdm
 import socket
@@ -17,6 +19,31 @@ storage_servers = ["localhost:8810",
 
 filesystem = {}
 chunks = {}
+
+
+class BackupDaemon(Thread):
+
+    def remove_circular_reference(self, fs):
+        if type(fs) is dict:
+            fs.pop('..', None)
+            for k in list(fs.keys()):
+                self.remove_circular_reference(fs[k])
+
+    def run(self):
+        while 1:
+            time.sleep(3)
+
+            path = os.path.dirname(os.path.realpath(__file__)) + '\\backup\\'
+            if not os.path.exists(path):
+                os.mkdir(path)
+
+            print(filesystem)
+            with open(path + "filesystem.json", "w") as f:
+                fs = copy.deepcopy(filesystem)
+                self.remove_circular_reference(fs)
+                f.write(json.dumps(fs, indent=4))
+            with open(path + "chunks.json", "w") as f:
+                f.write(json.dumps(chunks, indent=4))
 
 
 class StorageServerListener(Thread):
@@ -71,7 +98,7 @@ class ClientListener(Thread):
                 fs[f] = {"..": fs}
             fs = fs[f]
 
-        return fs['..'], folders[-1]
+        return fs, folders[-1]
 
     def run(self):
         action, filename, filesize = self.sock.recv(
@@ -106,39 +133,13 @@ class ClientListener(Thread):
             for c in fs_folder[fs_file]:
                 result.append(chunks[c])
             self.sock.sendall(json.dumps(result, indent=4).encode())
-            # filename = os.path.basename(filename)
-            # filename = self.handle_filename_collision(filename)
-            # filesize = int(filesize)
 
-            # print(clients)
-
-            # if action == "read":
-            #     if filename in content_table:
-            #         address = random.choice(content_table[filename])
-            #         self.sock.send(f"{address[0]}:{address[1]}".encode())
-            # elif action == "write":
-            #     client = random.choice(clients)
-            #     if client:
-            #         peer = random.choice(clients).getpeername()
-            #         addr = f'{peer[0]}:{peer[1]}'
-            #         content_table[filename] = [addr]
-            #         self.sock.send(addr.encode())
-
-            # print(content_table)
-        print("chunks", chunks)
-        print("filesystem", filesystem)
         self.close()
-
-        # contents = ""
-        # while True:
-        #     # try to read CHUNK_SIZE bytes from user
-        #     # this is blocking call, thread will be paused here
-        #     content = self.sock.recv(CHUNK_SIZE)
-        #     if not content:
-        #         # if we got no data – client has disconnected
 
 
 def main():
+    BackupDaemon().start()
+
     types = [[8800, clients, ], [8801, storage_servers]]
     for t in types:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -149,6 +150,7 @@ def main():
         sock.listen()
 
     t = types[0]
+
     while True:
         # for t in types:
         con, _ = t[2].accept()
