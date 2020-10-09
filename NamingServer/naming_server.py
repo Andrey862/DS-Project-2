@@ -89,23 +89,23 @@ class ClientListener(Thread):
         folders.reverse()
         return folders
 
-    def access_filesystem(self, path):
-        folders = self.split_path(path)
+    # def access_filesystem(self, path):
+    #     folders = self.split_path(path)
 
-        fs = filesystem
-        for f in folders[:]:
-            if not f in fs:
-                fs[f] = {"..": fs}
-            fs = fs[f]
+    #     fs = filesystem
+    #     for f in folders[:]:
+    #         if not f in fs:
+    #             fs[f] = {"..": fs}
+    #         fs = fs[f]
 
-        return fs
+    #     return fs
 
     def write(self, filename, filesize):
-        fl = self.access_filesystem(filename)
-        if 'chunks' not in fl:
-            fl['name'] = filename
-            fl['size'] = filesize
-            fl['chunks'] = []
+        if filename not in current_file:
+            current_file[filename] = {
+                'name': filename, 'size': filesize, 'chunks': []
+            }
+        fl = current_file[filename]
 
         N = math.ceil(filesize / CHUNK_SIZE)
         M = len(fl['chunks'])
