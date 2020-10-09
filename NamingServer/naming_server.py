@@ -4,6 +4,7 @@ import tqdm
 import socket
 import random
 import uuid
+import json
 from threading import Thread
 
 CHUNK_SIZE = 4096
@@ -15,8 +16,7 @@ storage_servers = ["localhost:8810",
 
 
 filesystem = {}
-chunk_metadata = {}
-chunk_location = {}
+chunks = {}
 
 
 class StorageServerListener(Thread):
@@ -76,27 +76,34 @@ class ClientListener(Thread):
     def run(self):
         action, filename, filesize = self.sock.recv(
             CHUNK_SIZE).decode().split("?")
-        filesize = int(filesize)
-
-        self.access_filesystem(filename)
 
         if (action == 'write'):
-            chosen_storage_servers = []
-            chunk_ids = []
-            for _ in range(math.ceil(filesize / CHUNK_SIZE)):
-                chunk_id = str(uuid.uuid4())
-                storage_server = random.choice(storage_servers)
-                chunk_location[chunk_id] = [storage_server]
-
-                chosen_storage_servers.append(storage_server)
-                chunk_ids.append(chunk_id)
-
             fs_folder, fs_file = self.access_filesystem(filename)
-            fs_folder[fs_file] = chunk_ids
+            if fs_file not in fs_folder:
+                fs_folder[fs_file] = []
 
-            print(filesystem)
+            N = math.ceil(int(filesize) / CHUNK_SIZE)
+            M = len(fs_folder[fs_file])
 
-            self.sock.sendall('?'.join(chosen_storage_servers).encode())
+            for i in range(min(N, M)):
+                chunks[fs_folder[fs_file][i]][1] += 1
+
+            if N > M:
+                for _ in range(N - M):
+                    chunk_id = str(uuid.uuid4())
+                    storage_server = random.choice(storage_servers)
+
+                    fs_folder[fs_file].append(chunk_id)
+                    chunks[chunk_id] = ([storage_server], 1, False)
+            elif N < M:
+                for _ in range(M - N):
+                    chunks[fs_folder[fs_file][N + i]][2] = True
+                    chunks[fs_folder[fs_file][N + i]][1] += 1
+
+            result = []
+            for c in fs_folder[fs_file][:N]:
+                result.append(chunks[c])
+            self.sock.sendall(json.dumps(result).encode())
             # filename = os.path.basename(filename)
             # filename = self.handle_filename_collision(filename)
             # filesize = int(filesize)
@@ -116,6 +123,8 @@ class ClientListener(Thread):
             #         self.sock.send(addr.encode())
 
             # print(content_table)
+        print("chunks", chunks)
+        print("filesystem", filesystem)
         self.close()
 
         # contents = ""

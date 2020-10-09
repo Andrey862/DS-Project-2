@@ -1,6 +1,7 @@
 import socket
 from threading import Condition, Thread
 import time
+import json
 import os
 import tqdm
 import sys
@@ -58,8 +59,8 @@ socket.connect((ip, port))
 print("Connected.")
 socket.send(f"{action}?{filename}?{filesize}".encode())
 
-storage_servers = socket.recv(CHUNK_SIZE).decode().split('?')
-print("storage_server", storage_servers)
+chunks = json.loads(socket.recv(CHUNK_SIZE).decode())
+print("storage_server", chunks)
 
 
 # progress = tqdm.tqdm(range(
