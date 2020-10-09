@@ -5,6 +5,7 @@ import os
 import tqdm
 import sys
 
+
 def recv_word(sock):
     word = b""
     for _ in range(20):
@@ -57,8 +58,8 @@ socket.connect((ip, port))
 print("Connected.")
 socket.send(f"{action}?{filename}?{filesize}".encode())
 
-storage_server = socket.recv(CHUNK_SIZE).decode()
-print("storage_server", storage_server)
+storage_servers = socket.recv(CHUNK_SIZE).decode().split('?')
+print("storage_server", storage_servers)
 
 
 # progress = tqdm.tqdm(range(
