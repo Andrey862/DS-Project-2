@@ -59,8 +59,8 @@ socket.connect((ip, port))
 print("Connected.")
 socket.send(f"{action}?{filename}?{filesize}".encode())
 
-chunks = json.loads(socket.recv(CHUNK_SIZE).decode())
-print("storage_server", chunks)
+received = socket.recv(CHUNK_SIZE).decode()
+print("storage_server", received)
 
 
 # progress = tqdm.tqdm(range(

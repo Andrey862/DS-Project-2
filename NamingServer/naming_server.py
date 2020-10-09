@@ -86,7 +86,7 @@ class ClientListener(Thread):
             M = len(fs_folder[fs_file])
 
             for i in range(min(N, M)):
-                chunks[fs_folder[fs_file][i]][1] += 1
+                chunks[fs_folder[fs_file][i]]['ver'] += 1
 
             if N > M:
                 for _ in range(N - M):
@@ -94,16 +94,18 @@ class ClientListener(Thread):
                     storage_server = random.choice(storage_servers)
 
                     fs_folder[fs_file].append(chunk_id)
-                    chunks[chunk_id] = ([storage_server], 1, False)
+                    chunks[chunk_id] = {
+                        "id": chunk_id, "ips": [storage_server], "ver": 1, "del": False
+                    }
             elif N < M:
-                for _ in range(M - N):
-                    chunks[fs_folder[fs_file][N + i]][2] = True
-                    chunks[fs_folder[fs_file][N + i]][1] += 1
+                for i in range(M - N):
+                    chunks[fs_folder[fs_file][N + i]]['del'] = True
+                    chunks[fs_folder[fs_file][N + i]]['ver'] += 1
 
             result = []
-            for c in fs_folder[fs_file][:N]:
+            for c in fs_folder[fs_file]:
                 result.append(chunks[c])
-            self.sock.sendall(json.dumps(result).encode())
+            self.sock.sendall(json.dumps(result, indent=4).encode())
             # filename = os.path.basename(filename)
             # filename = self.handle_filename_collision(filename)
             # filesize = int(filesize)
