@@ -19,6 +19,7 @@ storage_servers = ["localhost:8810",
 
 filesystem = {}
 chunks = {}
+current_dir = filesystem
 
 
 class BackupDaemon(Thread):
@@ -31,7 +32,7 @@ class BackupDaemon(Thread):
 
     def run(self):
         while 1:
-            time.sleep(3)
+            time.sleep(300)
 
             path = os.path.dirname(os.path.realpath(__file__)) + '\\backup\\'
             if not os.path.exists(path):
@@ -93,47 +94,78 @@ class ClientListener(Thread):
         folders = self.split_path(path)
 
         fs = filesystem
-        for f in folders[:-1]:
+        for f in folders[:]:
             if not f in fs:
                 fs[f] = {"..": fs}
             fs = fs[f]
 
-        return fs, folders[-1]
+        return fs
+
+    def write(self, filename, filesize):
+        fl = self.access_filesystem(filename)
+        if 'chunks' not in fl:
+            fl['name'] = filename
+            fl['size'] = filesize
+            fl['chunks'] = []
+
+        N = math.ceil(filesize / CHUNK_SIZE)
+        M = len(fl['chunks'])
+
+        for cid in fl['chunks'][:min(N, M)]:
+            chunks[cid]['ver'] += 1
+
+        if N > M:
+            for _ in range(N - M):
+                chunk_id = str(uuid.uuid4())
+                storage_server = random.choice(storage_servers)
+
+                fl['chunks'].append(chunk_id)
+                chunks[chunk_id] = {
+                    "id": chunk_id, "ips": [storage_server], "ver": 1, "del": False
+                }
+        elif N < M:
+            for cid in fl['chunks'][N:]:
+                chunks[cid]['del'] = True
+                chunks[cid]['ver'] += 1
+
+        self.sock.sendall(json.dumps(
+            fl['chunks'], indent=4).encode())
+
+    def empty_dir(self, dir):
+        for k in list(dir.keys()):
+            if 'chunks' in dir[k]:
+                for cid in dir['chunks']:
+                    chunks[cid]['del'] = True
+            else:
+                self.empty_dir(dir[k])
 
     def run(self):
-        action, filename, filesize = self.sock.recv(
-            CHUNK_SIZE).decode().split("?")
+        args = self.sock.recv(CHUNK_SIZE).decode().split("?")
 
-        if (action == 'write'):
-            fs_folder, fs_file = self.access_filesystem(filename)
-            if fs_file not in fs_folder:
-                fs_folder[fs_file] = []
-
-            N = math.ceil(int(filesize) / CHUNK_SIZE)
-            M = len(fs_folder[fs_file])
-
-            for i in range(min(N, M)):
-                chunks[fs_folder[fs_file][i]]['ver'] += 1
-
-            if N > M:
-                for _ in range(N - M):
-                    chunk_id = str(uuid.uuid4())
-                    storage_server = random.choice(storage_servers)
-
-                    fs_folder[fs_file].append(chunk_id)
-                    chunks[chunk_id] = {
-                        "id": chunk_id, "ips": [storage_server], "ver": 1, "del": False
-                    }
-            elif N < M:
-                for i in range(M - N):
-                    chunks[fs_folder[fs_file][N + i]]['del'] = True
-                    chunks[fs_folder[fs_file][N + i]]['ver'] += 1
-
-            result = []
-            for c in fs_folder[fs_file]:
-                result.append(chunks[c])
-            self.sock.sendall(json.dumps(result, indent=4).encode())
-
+        if args[0] == 'write':
+            self.write(args[1], int(args[2]))
+        elif args[0] == 'ls':
+            ls = ""
+            for k in list(dir.keys()):
+                ls += k
+                if 'size' in dir[k]:
+                    ls += ' - ' + str(dir[k]['size'])
+                ls += '\n'
+            self.sock.sendall(ls.encode())
+        elif args[0] == 'cd':
+            if args[1] in current_dir:
+                current_dir = current_dir[args[1]]
+            else:
+                self.sock.sendall("Directory not found".encode())
+        elif args[0] == 'mkdir':
+            if args[1] not in current_dir:
+                current_dir[args[1]] = {}
+        elif args[0] == 'rm':
+            if args[1] in current_dir:
+                self.empty_dir(current_dir[args[1]])
+                del current_dir[args[1]]]
+            else:
+                self.sock.sendall("Directory not found".encode())
         self.close()
 
 
