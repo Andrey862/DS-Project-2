@@ -78,14 +78,14 @@ class ClientListener(Thread):
         clients.remove(self.sock)
         self.sock.close()
 
-    # def handle_filename_collision(self, folders):
-        # base, ext = os.path.splitext(filename)
-        # result = filename
-        # i = 0
-        # while result in content_table:
-        #     i += 1
-        #     result = f"{base}_copy{i}{ext}"
-        # return result
+    # def handle_filename_collision(self, fs, filename):
+    #     base, ext = os.path.splitext(os.path.basename(filename))
+    #     result = base + ext
+    #     i = 0
+    #     while result in fs['contents']:
+    #         i += 1
+    #         result = f'{base}_{i}{ext}'
+    #     return result
 
     def split_path(self, path):
         folders = []
