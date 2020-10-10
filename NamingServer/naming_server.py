@@ -17,32 +17,45 @@ storage_servers = ["localhost:8810",
                    "localhost:8838"]
 
 
-filesystem = {'type': 'folder', 'name': 'root', '..': None, 'content': {}}
+filesystem = {'type': 'folder', 'name': 'root', 'content': {}}
 chunks = {}
 current_folder = filesystem
 
 
 class BackupDaemon(Thread):
+    def get_path(self):
+        path = os.path.dirname(os.path.realpath(__file__)) + '\\backup\\'
+        if not os.path.exists(path):
+            os.mkdir(path)
+        return path
+
     def remove_circular_reference(self, fs):
-        if type(fs) is dict:
-            fs.pop('..', None)
-            for k in list(fs.keys()):
-                self.remove_circular_reference(fs[k])
+        if '..' in fs:
+            del fs['..']
+        if fs['type'] != 'file':
+            for k in list(fs['content'].keys()):
+                self.remove_circular_reference(fs['content'][k])
+
+    def restore_circilar_reference(self, fs):
+        if fs['type'] != 'file':
+            for k in list(fs['content'].keys()):
+                fs['content'][k]['..'] = fs
+                self.restore_circilar_reference(fs['content'][k])
+
+    def backup(self):
+        path = self.get_path()
+
+        with open(path + "filesystem.json", "w") as f:
+            fs = copy.deepcopy(filesystem)
+            self.remove_circular_reference(fs)
+            f.write(json.dumps(fs, indent=4))
+        with open(path + "chunks.json", "w") as f:
+            f.write(json.dumps(chunks, indent=4))
 
     def run(self):
         while 1:
-            time.sleep(300)
-
-            path = os.path.dirname(os.path.realpath(__file__)) + '\\backup\\'
-            if not os.path.exists(path):
-                os.mkdir(path)
-
-            with open(path + "filesystem.json", "w") as f:
-                fs = copy.deepcopy(filesystem)
-                self.remove_circular_reference(fs)
-                f.write(json.dumps(fs, indent=4))
-            with open(path + "chunks.json", "w") as f:
-                f.write(json.dumps(chunks, indent=4))
+            time.sleep(3)
+            self.backup()
 
 
 class StorageServerListener(Thread):
@@ -96,14 +109,17 @@ class ClientListener(Thread):
             if f == '.':
                 continue
             if f == '..':
-                fs = fs['..'] or fs
-                continue
+                if '..' in fs:
+                    fs = fs['..']
+                    continue
+                else:
+                    return None
             if not f in fs['content']:
                 if add_missing:
                     fs['content'][f] = {
                         "type": "folder", "name": f, "..": fs, "content": {}}
                 else:
-                    return None, ''
+                    return None
             elif fs['content'][f]['type'] == 'file':
                 break
             fs = fs['content'][f]
