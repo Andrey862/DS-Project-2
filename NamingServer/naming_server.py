@@ -108,10 +108,10 @@ class ClientListener(Thread):
                 break
             fs = fs['content'][f]
 
-        return (fs, folders[-1])
+        return fs
 
     def write(self, filename, filesize):
-        fl, _ = self.access_filesystem(filename)
+        fl = self.access_filesystem(filename)
         if fl['type'] != 'file':
             fl['type'] = 'file'
             fl['size'] = filesize
@@ -169,7 +169,7 @@ class ClientListener(Thread):
         if args[0] == 'write':
             self.write(args[1], int(args[2]))
         elif args[0] == 'ls':
-            fs, _ = self.access_filesystem(args[1], False)
+            fs = self.access_filesystem(args[1], False)
             print(fs)
             if fs:
                 ls = self.ls(fs, len(args) > 2)
@@ -177,7 +177,7 @@ class ClientListener(Thread):
                 ls = "Directory not found"
             self.sock.sendall(ls.encode())
         elif args[0] == 'cd':
-            fs, _ = self.access_filesystem(args[1], False)
+            fs = self.access_filesystem(args[1], False)
             if fs:
                 current_folder = fs
             else:
@@ -185,10 +185,10 @@ class ClientListener(Thread):
         elif args[0] == 'mkdir':
             self.access_filesystem(args[1])
         elif args[0] == 'rm':
-            fs, fn = self.access_filesystem(args[1])
+            fs = self.access_filesystem(args[1])
             if fs:
                 self.delete(fs)
-                del fs['content']['..']['content'][fn]
+                del fs['..']['content'][fs['name']]
             else:
                 self.sock.sendall("Directory not found".encode())
 
