@@ -17,9 +17,9 @@ storage_servers = ["localhost:8810",
                    "localhost:8838"]
 
 
-filesystem = {}
+filesystem = {'type': 'folder', 'name': 'root', '..': None, 'content': {}}
 chunks = {}
-current_file = filesystem
+current_folder = filesystem
 
 
 class BackupDaemon(Thread):
@@ -37,7 +37,6 @@ class BackupDaemon(Thread):
             if not os.path.exists(path):
                 os.mkdir(path)
 
-            print(filesystem)
             with open(path + "filesystem.json", "w") as f:
                 fs = copy.deepcopy(filesystem)
                 self.remove_circular_reference(fs)
@@ -90,30 +89,38 @@ class ClientListener(Thread):
         return folders
 
     def access_filesystem(self, path, add_missing=True):
-        fs = current_file
+        fs = current_folder
         folders = self.split_path(path)
 
         for f in folders:
-            if not f in fs:
+            if f == '.':
+                continue
+            if f == '..':
+                fs = fs['..'] or fs
+                continue
+            if not f in fs['content']:
                 if add_missing:
-                    fs[f] = {"..": fs}
+                    fs['content'][f] = {
+                        "type": "folder", "name": f, "..": fs, "content": {}}
                 else:
-                    return None
-            fs = fs[f]
+                    return None, ''
+            elif fs['content'][f]['type'] == 'file':
+                break
+            fs = fs['content'][f]
 
         return (fs, folders[-1])
 
     def write(self, filename, filesize):
-        fl = self.access_filesystem(filename)
-        if 'chunks' not in fl:
-            fl['name'] = filename
+        fl, _ = self.access_filesystem(filename)
+        if fl['type'] != 'file':
+            fl['type'] = 'file'
             fl['size'] = filesize
-            fl['chunks'] = []
+            fl['content'] = []
 
         N = math.ceil(filesize / CHUNK_SIZE)
-        M = len(fl['chunks'])
+        M = len(fl['content'])
 
-        for cid in fl['chunks'][:min(N, M)]:
+        for cid in fl['content'][:min(N, M)]:
             chunks[cid]['ver'] += 1
 
         if N > M:
@@ -121,56 +128,58 @@ class ClientListener(Thread):
                 chunk_id = str(uuid.uuid4())
                 storage_server = random.choice(storage_servers)
 
-                fl['chunks'].append(chunk_id)
+                fl['content'].append(chunk_id)
                 chunks[chunk_id] = {
                     "id": chunk_id, "ips": [storage_server], "ver": 1, "del": False
                 }
         elif N < M:
-            for cid in fl['chunks'][N:]:
+            for cid in fl['content'][N:]:
                 chunks[cid]['del'] = True
                 chunks[cid]['ver'] += 1
 
         self.sock.sendall(json.dumps(
-            fl['chunks'], indent=4).encode())
+            fl['content'], indent=4).encode())
 
     def delete(self, filename):
-        if 'chunks' in filename:
-            for cid in filename['chunks']:
+        if filename['type'] == 'file':
+            for cid in filename['content']:
                 chunks[cid]['del'] = True
         else:
-            for k in list(filename.keys()):
-                self.delete(filename[k])
+            for k in list(filename['content'].keys()):
+                self.delete(filename['content'][k])
 
-    def ls(self, fs, rec, tab=0):
+    def ls(self, fs, rec=False, tab=0):
         ls = ""
-        for k in list(fs.keys()):
+        for k in list(fs['content'].keys()):
             ls = '-' * tab + ' ' if tab else ''
             ls += k
-            if 'size' in fs[k]:
-                ls += f" : {str(fs[k]['size'])}b"
+            if fs['content'][k]['type'] == 'file':
+                ls += f" : {str(fs['content'][k]['size'])}b"
             ls += '\n'
 
-            if 'size' not in current_file[k]:
-                ls += self.ls(rec, tab + 1)
+            if rec and fs['content'][k]['type'] == 'folder':
+                print(k)
+                ls += self.ls(fs['content'][k], rec, tab + 1)
         return ls
 
     def run(self):
-        global current_file
+        global current_folder
         args = self.sock.recv(CHUNK_SIZE).decode().split("?")
-
+        print(args)
         if args[0] == 'write':
             self.write(args[1], int(args[2]))
         elif args[0] == 'ls':
             fs, _ = self.access_filesystem(args[1], False)
+            print(fs)
             if fs:
-                ls = self.ls(fs, args[2] == '-r').encode()
+                ls = self.ls(fs, len(args) > 2)
             else:
                 ls = "Directory not found"
             self.sock.sendall(ls.encode())
         elif args[0] == 'cd':
             fs, _ = self.access_filesystem(args[1], False)
             if fs:
-                current_file = fs['..'] if 'chunks' in fs else fs
+                current_folder = fs
             else:
                 self.sock.sendall("Directory not found".encode())
         elif args[0] == 'mkdir':
@@ -179,7 +188,7 @@ class ClientListener(Thread):
             fs, fn = self.access_filesystem(args[1])
             if fs:
                 self.delete(fs)
-                del fs['..'][fn]
+                del fs['content']['..']['content'][fn]
             else:
                 self.sock.sendall("Directory not found".encode())
 
