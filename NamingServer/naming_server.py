@@ -89,23 +89,26 @@ class ClientListener(Thread):
         folders.reverse()
         return folders
 
-    # def access_filesystem(self, path):
-    #     folders = self.split_path(path)
+    def access_filesystem(self, path, add_missing=True):
+        fs = current_file
+        folders = self.split_path(path)
 
-    #     fs = filesystem
-    #     for f in folders[:]:
-    #         if not f in fs:
-    #             fs[f] = {"..": fs}
-    #         fs = fs[f]
+        for f in folders:
+            if not f in fs:
+                if add_missing:
+                    fs[f] = {"..": fs}
+                else:
+                    return None
+            fs = fs[f]
 
-    #     return fs
+        return (fs, folders[-1])
 
     def write(self, filename, filesize):
-        if filename not in current_file:
-            current_file[filename] = {
-                'name': filename, 'size': filesize, 'chunks': []
-            }
-        fl = current_file[filename]
+        fl = self.access_filesystem(filename)
+        if 'chunks' not in fl:
+            fl['name'] = filename
+            fl['size'] = filesize
+            fl['chunks'] = []
 
         N = math.ceil(filesize / CHUNK_SIZE)
         M = len(fl['chunks'])
@@ -138,14 +141,18 @@ class ClientListener(Thread):
             for k in list(filename.keys()):
                 self.delete(filename[k])
 
-    def ls(self):
+    def ls(self, fs, rec, tab=0):
         ls = ""
-        for k in list(current_file.keys()):
+        for k in list(fs.keys()):
+            ls = '-' * tab + ' ' if tab else ''
             ls += k
-            if 'size' in current_file[k]:
-                ls += ' - ' + str(current_file[k]['size'])
+            if 'size' in fs[k]:
+                ls += f" : {str(fs[k]['size'])}b"
             ls += '\n'
-        self.sock.sendall(ls.encode())
+
+            if 'size' not in current_file[k]:
+                ls += self.ls(rec, tab + 1)
+        return ls
 
     def run(self):
         global current_file
@@ -154,19 +161,25 @@ class ClientListener(Thread):
         if args[0] == 'write':
             self.write(args[1], int(args[2]))
         elif args[0] == 'ls':
-            self.ls()
+            fs, _ = self.access_filesystem(args[1], False)
+            if fs:
+                ls = self.ls(fs, args[2] == '-r').encode()
+            else:
+                ls = "Directory not found"
+            self.sock.sendall(ls.encode())
         elif args[0] == 'cd':
-            if args[1] in current_file:
-                current_file = current_file[args[1]]
+            fs, _ = self.access_filesystem(args[1], False)
+            if fs:
+                current_file = fs['..'] if 'chunks' in fs else fs
             else:
                 self.sock.sendall("Directory not found".encode())
         elif args[0] == 'mkdir':
-            if args[1] not in current_file:
-                current_file[args[1]] = {}
+            self.access_filesystem(args[1])
         elif args[0] == 'rm':
-            if args[1] in current_file:
-                self.delete(current_file[args[1]])
-                del current_file[args[1]]
+            fs, fn = self.access_filesystem(args[1])
+            if fs:
+                self.delete(fs)
+                del fs['..'][fn]
             else:
                 self.sock.sendall("Directory not found".encode())
 
