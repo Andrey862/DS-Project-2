@@ -11,10 +11,7 @@ from threading import Thread
 
 CHUNK_SIZE = 4096
 
-clients = []
-storage_servers = ["localhost:8810",
-                   "localhost:8815",
-                   "localhost:8838"]
+storage_servers = []
 
 
 filesystem = {'type': 'folder', 'name': 'root', 'content': {}}
@@ -24,7 +21,7 @@ current_folder = filesystem
 
 class BackupDaemon(Thread):
     def get_path(self):
-        path = os.path.dirname(os.path.realpath(__file__)) + '\\backup\\'
+        path = 'backup\\'
         if not os.path.exists(path):
             os.mkdir(path)
         return path
@@ -59,23 +56,58 @@ class BackupDaemon(Thread):
 
 
 class StorageServerListener(Thread):
-    def __init__(self, sock):
+    def __init__(self, sock, addr):
         super().__init__(daemon=True)
         self.sock = sock
+        self.addr = addr
+
+    def close(self):
+        self.sock.close()
+
+    def get_adjancet_addresses(self, i):
+        addr = ""
+        ln = len(storage_servers)
+        if i == 0:
+            addr += storage_servers[ln - 1] + '\n'
+        else:
+            addr += storage_servers[i - 1] + '\n'
+        if i == ln - 1:
+            addr += storage_servers[0] + '\n'
+        else:
+            addr += storage_servers[i + 1] + '\n'
+        return addr
+
+    def conn(self):
+        if len(storage_servers) == 0:
+            i = 0
+            storage_servers.append(self.addr)
+        if self.addr in storage_servers:
+            i = storage_servers.index(self.addr)
+        else:
+            i = random.randrange(len(storage_servers))
+            storage_servers.insert(i, self.addr)
+        addr = self.get_adjancet_addresses(i)
+        self.sock.sendall(addr.encode())
 
     def run(self):
-        self.sock.recv(CHUNK_SIZE).decode().split("?")
-
-        # Thread to listen one particular client
+        args = self.sock.recv(CHUNK_SIZE).decode().split("\n")
+        if args[0] == 'conn':
+            self.conn()
+        elif args[0] == 'upd':
+            cid = args[1]
+            ver = int(args[2])
+            chunks[cid]['ips'].append(self.addr)
+            chunks[cid]['ver'] = max(ver, chunks[cid]['ver'])
+        self.close()
 
 
 class ClientListener(Thread):
-    def __init__(self, sock):
+    def __init__(self, sock, addr):
         super().__init__(daemon=True)
         self.sock = sock
+        self.addr = addr
 
     def close(self):
-        clients.remove(self.sock)
         self.sock.close()
 
     # def handle_filename_collision(self, fs, filename):
@@ -174,19 +206,16 @@ class ClientListener(Thread):
             ls += '\n'
 
             if rec and fs['content'][k]['type'] == 'folder':
-                print(k)
                 ls += self.ls(fs['content'][k], rec, tab + 1)
         return ls
 
     def run(self):
         global current_folder
         args = self.sock.recv(CHUNK_SIZE).decode().split("?")
-        print(args)
         if args[0] == 'write':
             self.write(args[1], int(args[2]))
         elif args[0] == 'ls':
             fs = self.access_filesystem(args[1], False)
-            print(fs)
             if fs:
                 ls = self.ls(fs, len(args) > 2)
             else:
@@ -211,29 +240,28 @@ class ClientListener(Thread):
         self.close()
 
 
+class PortListener(Thread):
+    def __init__(self, sock, obj):
+        super().__init__(daemon=True)
+        self.sock = sock
+        self.obj = obj
+
+    def run(self):
+        while 1:
+            conn, addr = self.sock.accept()
+            addr = f'{addr[0]}:{addr[1]}'
+            self.obj(conn, addr).start()
+
+
 def main():
     BackupDaemon().start()
 
-    types = [[8800, clients, ], [8801, storage_servers]]
-    for t in types:
+    for t in ((8800, ClientListener), (8801, StorageServerListener)):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        t.append(sock)
-
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(('', t[0]))
         sock.listen()
-
-    t = types[0]
-
-    while True:
-        # for t in types:
-        con, _ = t[2].accept()
-        t[1].append(con)
-
-        if t[0] == 8800:
-            ClientListener(con).start()
-        else:
-            StorageServerListener(con).start()
+        PortListener(sock, t[1]).start()
 
 
 if __name__ == "__main__":
