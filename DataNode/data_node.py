@@ -1,57 +1,86 @@
+from sys import version
 import socket
 from threading import Condition, Thread
 import time
 import os
 import sys
 import random
+import json
+from typing import List
 
 DN_CLIENT_PORT = 10005
 DN_DN_PORT = 10006
 connection_to_nn = None
+BACKUP_PERIOD = 30
+
+
+class NS():
+    con = None
+
+    @classmethod
+    def connect(cls):
+        return None
+        NN_ip = os.environ['NN']
+
+    @classmethod
+    def get_ips(cls):
+        return [input("prev_ip\n"), input("next_ip\n")]
+
+    @classmethod
+    def send_update(cls, chank, version):
+        pass
 
 
 class ContentTable():
     content_table__ = {}
+    BACKUP_PATH = '__files__/backup.json'
 
     @classmethod
-    def get(cls, chank: int):
+    def get_all(cls):
+        for chank in cls.content_table__:
+            yield cls.get(chank)
+
+    @classmethod
+    def get(cls, chank: bytes):
         """ ver, del, len """
         if (chank in cls.content_table__):
             v = cls.content_table__[chank]
-            return {'ver': v[0], 'del': v[1], 'len': v[2]}
+            return {'ver': v[0], 'del': v[1], 'len': v[2], 'chank': chank}
         else:
-            return {'ver': -1, 'del': True, 'len': 0}
+            return {'ver': -1, 'del': True, 'len': 0, 'chank': chank}
 
     @classmethod
     def has(cls, chank, ver):
         return cls.get(chank)['ver'] == ver and not cls.get(chank)['del']
 
     @classmethod
-    def newer(cls, chank, ver):
-        return cls.get(chank)['ver'] >= ver
-
-    @classmethod
-    def set(cls, chank, ver, del_, len_):
-        print(f'Content table: set ch={chank} ver={ver} del={del_}')
+    def set(cls, chank, version, deleted, lenngth):
+        print(f'Content table: set ch={chank} ver={version} del={deleted}')
         if (chank in cls.content_table__):
             v = cls.content_table__[chank]
-            if (v[0] > ver):
+            if (v[0] > version):
                 raise Exception("new update is older than current")
-        cls.content_table__[chank] = [ver, del_, len_]
+        cls.content_table__[chank] = [version, deleted, lenngth]
 
     @classmethod
-    def save_json(cls):
-        pass
+    def remove(cls, chank):
+        cls.content_table__.pop(chank)
 
     @classmethod
-    def load_json(cls):
-        pass
+    def to_json(cls):
+        table = {e[0].decode(): e[1] for e in cls.content_table__.items()}
+        return json.dumps(table)
+
+    @classmethod
+    def from_json(cls, content):
+        table = json.loads(content)
+        cls.content_table__ = {e[0].encode(): e[1] for e in table.items()}
 
 
 class NextDN():
     to_send__ = set()
-    next_ip = input("next_ip\n")  # "127.0.0.1"
-    prev_ip = input("prev_ip\n")  # "127.0.0.1"
+    next_ip = None
+    prev_ip = None
 
     @classmethod
     def add(cls, chank: bytes, sourse=None):
@@ -102,7 +131,8 @@ def save_to_disk_and_tables(sock: socket.socket, chank: bytes, version: str, del
         length = len(content)
 
     NextDN.add(chank, sourse="client")
-    ContentTable.set(chank, ver=version, del_=deleted, len_=length)
+    ContentTable.set(chank, version=version, deleted=deleted, lenngth=length)
+    NS.send_update(chank, version)
 
 
 def recv_word(sock, split=b'\n', max_len=20, check_dead=False):
@@ -119,6 +149,22 @@ def recv_word(sock, split=b'\n', max_len=20, check_dead=False):
         return word, dead
     else:
         return word
+
+
+class BackupDaemon(Thread):
+    def __init__(self) -> None:
+        super().__init__(daemon=True)
+
+    def run(self):
+        print('Started Backup demon')
+        while True:
+            try:
+                with open(ContentTable.BACKUP_PATH, 'w') as f:
+                    f.write(ContentTable.to_json())
+                print("Content table backup performed")
+                time.sleep(BACKUP_PERIOD)
+            except Exception as e:
+                print(f'Error during content table backup: {repr(e)}')
 
 
 class ClientServer(Thread):
@@ -189,7 +235,7 @@ class ClientListener(Thread):
             try:
                 self.action()
             except Exception as e:
-                print(f'fatal error! Restarting Client Listener: {e}')
+                print(f'Error! Restarting Client Listener: {e}')
 
 
 class DNListener(Thread):
@@ -213,12 +259,18 @@ class DNListener(Thread):
                 version = int(recv_word(sock))
                 deleted = to_bool[recv_word(sock)]
                 length = int(recv_word(sock))
-                if (ContentTable.newer(chank, version)):
+                if (ContentTable.get(chank)['ver'] >= version):
                     sock.sendall(b'Have\n')
                 else:
                     sock.sendall(b'ACK\n')
                     save_to_disk_and_tables(
                         sock, chank, version, deleted, length)
+            elif (command == b'ct'):
+                ct = ContentTable.to_json
+                sock.sendall(f'{len(ct)}\n{ct}'.encode())
+                res = recv_word(sock)
+                if (res != b'ACK'):
+                    print('DNListener: unknown responce: ', res)
 
     def run(self):
         while (True):
@@ -236,11 +288,11 @@ class DNListener(Thread):
                         con.close()
 
                 print('Accept PrevDNListener')
-                con.settimeout(90.0)
+                con.settimeout(120.0)
                 self.action(con, addr)
                 sock.close()
             except Exception as e:
-                print(f'fatal error! Restarting DN Listener: {e}')
+                print(f'Error! Restarting DN Listener: {e}')
                 time.sleep(0.5)
 
 
@@ -248,6 +300,20 @@ class DNPusher(Thread):
     # exist only one to not overload network
     def __init__(self) -> None:
         super().__init__(daemon=True)
+
+    def request_content_table(self, sock: socket.socket):
+        sock.sendall(b'ct\n')
+        length = recv_word(sock)
+        content = b''
+        part = b' '
+        while(len(content) < length and part != b''):
+            part = sock.recv(1024)
+            content += part
+        sock.sendall(b'ACK\n')
+        table = json.loads(content)
+        for row in ContentTable.get_all():
+            if row['chank'] not in table or table[row['chank']] < row['ver']:
+                NextDN.add(row['chank'])
 
     def action(self,  sock: socket.socket, ip):
         while(True):
@@ -286,39 +352,58 @@ class DNPusher(Thread):
                 with socket.socket() as s:
                     ip = NextDN.next_ip
                     s.connect((ip, DN_DN_PORT))
-                    print('Connected Pusher')
+                    print('Connected Pusher, requesting content table')
+                    self.request_content_table(s)
+                    print('Got next DN table')
                     self.action(s, ip)
             except Exception as e:
-                print(f'fatal error! Restarting DN Pusher: {repr(e)}')
+                print(f'Error! Restarting DN Pusher: {repr(e)}')
                 time.sleep(1.5)
 
 
+def remove_inconsistency():
+    files = [os.path.splitext(f) for f in os.listdir(
+        '__files__') if os.path.isfile(os.path.join('__files__', f))]
+    disk_chanks = {e[0].encode() for e in files if e[1] == '.chank'}
+
+    # search for missing values
+    for row in tuple(ContentTable.get_all()):
+        if row['chank'] not in disk_chanks:
+            print('inconsistency, missing chank: ', row['chank'])
+            ContentTable.remove(row['chank'])
+    # remove ghost chanks
+    for file in disk_chanks:
+        if ContentTable.get(file)['del']:
+            print('inconsistency, ghost chank: ', file)
+            os.remove(get_chank_name(file))
+
+
 if __name__ == "__main__":
-    # connect_to_nn()
-    # init_global_variables
-    # read existing files
-    # delete marked as del in content table
-    # update content table for missing values
-    # read lab6 https://gist.github.com/gordinmitya/349f4abdc6b16dc163fa39b55544fd34
-    # my solution to lab6 https://github.com/Andrey862/repo
+    if os.path.isfile(ContentTable.BACKUP_PATH):
+        with open(ContentTable.BACKUP_PATH, 'r') as f:
+            try:
+                ContentTable.from_json(f.read())
+            except json.decoder.JSONDecodeError as e:
+                print('backup corrupted! Cleaning content')
+
+    remove_inconsistency()
+    NS.connect()
+    NextDN.prev_ip, NextDN.next_ip = NS.get_ips()
 
     push_only = to_bool[input("push only\n").encode()]
     read_only = to_bool[input("read only\n").encode()]
     print(push_only, read_only)
-    cl = ClientListener()
-    if (not push_only):
-        dl = DNListener()
-    if (not read_only):
-        dp = DNPusher()
 
-    cl.start()
+    services = []
+    services.append(BackupDaemon())
+    services.append(ClientListener())
     if (not push_only):
-        dl.start()
+        services.append(DNListener())
     if (not read_only):
-        dp.start()
+        services.append(DNPusher())
 
-    cl.join()
-    if (not push_only):
-        dl.join()
-    if (not read_only):
-        dp.join()
+    for s in services:
+        s.start()
+
+    for s in services:
+        s.join()
