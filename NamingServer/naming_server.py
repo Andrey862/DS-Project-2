@@ -178,14 +178,14 @@ class ClientListener(Thread):
                     continue
                 else:
                     return None
+            if fs['type'] == 'file':
+                break
             if f not in fs['content']:
                 if add_missing:
                     fs['content'][f] = {
                         "type": "folder", "name": f, "..": fs, "content": {}}
                 else:
                     return None
-            elif fs['content'][f]['type'] == 'file':
-                break
             fs = fs['content'][f]
 
         return fs
