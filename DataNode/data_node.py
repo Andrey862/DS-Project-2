@@ -164,7 +164,7 @@ def save_to_disk_and_tables(sock: socket.socket, chank: bytes, version: str, del
     NS.send_update(chank, version)
 
 
-def recv_word(sock, split=b'\n', max_len=20, check_dead=False):
+def recv_word(sock, split=b'\n', max_len=30, check_dead=False):
     word = b""
     dead = False
     for _ in range(max_len):

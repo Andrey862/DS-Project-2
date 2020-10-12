@@ -33,7 +33,8 @@ def recv_stream(sock, length):
     return content.decode()
 
 
-def send_chank_to_dn(dn_ip, chank, version, deleted, content, port=8803):
+def send_chank_to_dn(dn_ip, chank: str, version: int, deleted: bool, content: bytes, port=8803):
+    print(dn_ip, chank, version)
     with socket.socket() as s:
         s.connect((dn_ip, port))
         d = {True: 't', False: 'f'}
@@ -51,7 +52,7 @@ def send_chank_to_dn(dn_ip, chank, version, deleted, content, port=8803):
             return res
 
 
-def read_chank_from_dn(dn_ip, chank, version, port=8803):
+def read_chank_from_dn(dn_ip, chank: str, version: int, port=8803):
     with socket.socket() as s:
         s.connect((dn_ip, port))
         s.sendall(f'read\n{chank}\n{version}\n'.encode('UTF-8'))
@@ -66,19 +67,18 @@ CHUNK_SIZE = 4096
 
 while 1:
     argc = input().split(' ')
-    ip, port, action = argc[0:3]
-    port = int(port)
+    ip, action = argc[0:2]
 
     sock = socket.socket()
-    sock.connect((ip, port))
+    sock.connect((ip, 8800))
 
     if action == 'write':
-        filename = argc[3]
+        filename = argc[2]
         filesize = os.path.getsize(filename)
         argc = [action, filename, filesize]
     else:
         argc = argc[2:]
-        if action == 'ls' and len(argc) < 3:
+        if action == 'ls' and len(argc) < 2:
             argc.append("")
 
     argc = [str(a) for a in argc]
