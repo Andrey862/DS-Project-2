@@ -8,8 +8,9 @@ import random
 import json
 from typing import List
 
-DN_CLIENT_PORT = 10005
-DN_DN_PORT = 10006
+DN_CLIENT_PORT = 8803
+DN_DN_PORT = 8804
+NS_PORT = 8801
 connection_to_nn = None
 BACKUP_PERIOD = 30
 
@@ -19,20 +20,26 @@ class NS():
 
     @classmethod
     def connect(cls):
+        NS_ip = os.environ['NN']
+        s = socket.socket()
+        s.connect((NS_ip, NS_PORT))
+        s.sendall(b'conn\n')
+        cls.prev_ip, cls.next_ip = recv_word(s), recv_word(s)
         return None
-        NN_ip = os.environ['NN']
 
     @classmethod
     def get_ips(cls):
-        return [input("prev_ip\n"), input("next_ip\n")]
+        return cls.prev_ip, cls.next_ip
+        # return [input("prev_ip\n"), input("next_ip\n")]
 
     @classmethod
     def send_update(cls, chank, version):
-        pass
+        s.sendall(f'upd\n{chank.decode()}\n{version}\n')
 
     @classmethod
     def listen_for_updates(cls, chank, version):
-        pass
+        cls.prev_ip, cls.next_ip = recv_word(s), recv_word(s)
+        NextDN.prev_ip, NextDN.next_ip = cls.get_ips()
 
 
 class ContentTable():
@@ -324,7 +331,7 @@ class DNPusher(Thread):
             part = sock.recv(1024)
             content += part
         sock.sendall(b'ACK\n')
-        print('recived ct: ', content)
+        print('recived ct: ', content[:100])
         table = json.loads(content.decode())
         for row in ContentTable.get_all():
             if row['chank'] not in table or table[row['chank'].decode()] < row['ver']:
@@ -405,17 +412,11 @@ if __name__ == "__main__":
     NS.connect()
     NextDN.prev_ip, NextDN.next_ip = NS.get_ips()
 
-    push_only = to_bool[input("push only\n").encode()]
-    read_only = to_bool[input("read only\n").encode()]
-    print(push_only, read_only)
-
     services = []
     services.append(BackupDaemon())
     services.append(ClientListener())
-    if (not push_only):
-        services.append(DNListener())
-    if (not read_only):
-        services.append(DNPusher())
+    services.append(DNListener())
+    services.append(DNPusher())
 
     for s in services:
         s.start()
