@@ -1,9 +1,9 @@
 # Project 2
 ## How to launch
 ### Naming server
->sudo docker run --env NN=\<ip of your NS here\> -p 8800-8810:8800-8810 andrey2/datanode:1.0 
+>docker run --env NN=\<ip of your NS here\> -p 8800-8810:8800-8810 andrey2/datanode:1.0 
 ### Data node
->sudo docker run -p 8800-8810:8800-8810 andrey2/namingserver:1.0
+>docker run -p 8800-8810:8800-8810 andrey2/namingserver:1.0
 ### Clinet
 git clone https://github.com/Andrey862/DS-Project-2 <br/>
 cd Client
