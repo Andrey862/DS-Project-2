@@ -76,7 +76,15 @@ class StorageServerListener(Thread):
         self.addr = addr
 
     def close(self):
+        i = storage_servers.index(self)
         storage_servers.remove(self)
+
+        if len(storage_servers):
+            prev = (i - 1) % len(storage_servers)
+            storage_servers[prev].ping_adjacent()
+            next = (i + 1) % len(storage_servers)
+            storage_servers[next].ping_adjacent()
+
         self.sock.close()
 
     def get_adjacent_servers(self, i):
@@ -115,15 +123,18 @@ class StorageServerListener(Thread):
         storage_servers[next].ping_adjacent()
 
     def run(self):
-        while 1:
-            comm = recv_word(self.sock)
-            if comm == 'conn':
-                self.conn()
-            elif comm == 'upd':
-                cid = recv_word(self.sock)
-                ver = int(recv_word(self.sock))
-                chunks[cid]['ips'].append(self.addr)
-                chunks[cid]['ver'] = max(ver, chunks[cid]['ver'])
+        try:
+            while 1:
+                comm = recv_word(self.sock)
+                if comm == 'conn':
+                    self.conn()
+                elif comm == 'upd':
+                    cid = recv_word(self.sock)
+                    ver = int(recv_word(self.sock))
+                    chunks[cid]['ips'].append(self.addr)
+                    chunks[cid]['ver'] = max(ver, chunks[cid]['ver'])
+        except:
+            pass
 
         self.close()
 
