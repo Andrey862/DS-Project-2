@@ -5,4 +5,4 @@ WORKDIR /code
 COPY requirements.txt /code/
 RUN pip install -r requirements.txt
 COPY . /code/
-CMD python name_node.py
+CMD python naming_server.py
