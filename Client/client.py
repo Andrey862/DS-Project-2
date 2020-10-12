@@ -52,8 +52,8 @@ while 1:
     ip, port, action = argc[0:3]
     port = int(port)
 
-    socket = socket.socket()
-    socket.connect((ip, port))
+    sock = socket.socket()
+    sock.connect((ip, port))
 
     if action == 'write':
         filename = argc[3]
@@ -66,9 +66,9 @@ while 1:
 
     argc = [str(a) for a in argc]
     send = '\n'.join(argc) + '\n'
-    socket.send(send.encode())
+    sock.send(send.encode())
 
-    received = socket.recv(CHUNK_SIZE).decode()
+    received = sock.recv(CHUNK_SIZE).decode()
     print(received)
 
-    socket.close()
+    sock.close()

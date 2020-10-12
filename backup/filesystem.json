@@ -1,5 +1,17 @@
 {
     "type": "folder",
     "name": "root",
-    "content": {}
+    "content": {
+        "f1": {
+            "type": "folder",
+            "name": "f1",
+            "content": {
+                "f2": {
+                    "type": "folder",
+                    "name": "f2",
+                    "content": {}
+                }
+            }
+        }
+    }
 }
