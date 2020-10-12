@@ -11,8 +11,7 @@ from typing import List
 DN_CLIENT_PORT = 8803
 DN_DN_PORT = 8804
 NS_PORT = 8801
-connection_to_nn = None
-BACKUP_PERIOD = 30
+BACKUP_PERIOD = 90
 
 
 class NS():
@@ -27,12 +26,15 @@ class NS():
             NS_ip = '127.0.0.1'
         print("NS ip is ", NS_ip)
         #NS_ip = '127.0.0.1'
-        s = socket.socket()
-        s.connect((NS_ip, NS_PORT))
-        s.sendall(b'conn\n')
+        cls.con = socket.socket()
+        cls.con.connect((NS_ip, NS_PORT))
+        cls.con.sendall(b'conn\n')
         print('sent conn')
-        cls.prev_ip, cls.next_ip = recv_word(s), recv_word(s)
+        cls.prev_ip, cls.next_ip = recv_word(cls.con), recv_word(cls.con)
         print('ips ', cls.prev_ip, cls.next_ip)
+        for row in ContentTable.get_all():
+            cls.send_update(row['chank'], row['ver'])
+        Thread(target=cls.listen_for_updates).start()
         return None
 
     @classmethod
@@ -47,9 +49,15 @@ class NS():
         s.sendall(f'upd\n{chank.decode()}\n{version}\n'.encode())
 
     @classmethod
-    def listen_for_updates(cls, chank, version):
-        cls.prev_ip, cls.next_ip = recv_word(s), recv_word(s)
-        NextDN.prev_ip, NextDN.next_ip = cls.get_ips()
+    def listen_for_updates(cls):
+        while (True):
+            try:
+                cls.prev_ip, cls.next_ip = recv_word(
+                    cls.con), recv_word(cls.con)
+                print('rcv ips: ', cls.get_ips())
+                NextDN.prev_ip, NextDN.next_ip = cls.get_ips()
+            except Exception as e:
+                print('exception during nn listaning', repr(e))
 
 
 class ContentTable():
@@ -309,7 +317,7 @@ class DNListener(Thread):
                         con.close()
 
                 print('Accept PrevDNListener')
-                con.settimeout(120.0)
+               # con.settimeout(120.0)
                 self.action(con, addr)
                 con.close()
                 sock.close()
@@ -351,6 +359,9 @@ class DNPusher(Thread):
 
     def action(self,  sock: socket.socket, ip):
         while(True):
+            if (ip != NextDN.next_ip):
+                print('Pusher: ip rotated!')
+                return
             chank = NextDN.get()
             if (chank == None):
                 #print(f'pushing heart to {ip}')
@@ -392,7 +403,7 @@ class DNPusher(Thread):
                     self.action(s, ip)
             except Exception as e:
                 print(f'Error! Restarting DN Pusher: {repr(e)}')
-                time.sleep(1.5)
+                time.sleep(3)
 
 
 def remove_inconsistency():
