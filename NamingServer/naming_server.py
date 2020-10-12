@@ -136,8 +136,8 @@ class StorageServerListener(Thread):
                     if self.addr not in chunks[cid]['ips']:
                         chunks[cid]['ips'].append(self.addr)
                     chunks[cid]['ver'] = max(ver, chunks[cid]['ver'])
-        except:
-            pass
+        except Exception as e:
+            print(repr(e))
 
         self.close()
 
@@ -217,7 +217,7 @@ class ClientListener(Thread):
                 chunks[cid]['del'] = True
                 chunks[cid]['ver'] += 1
 
-        self.send_chunks(filename)
+        self.send_chunks(fl)
 
     def delete(self, filename):
         if filename['type'] == 'file':
@@ -240,8 +240,7 @@ class ClientListener(Thread):
                 ls += self.ls(fs['content'][k], rec, tab + 1)
         return ls
 
-    def send_chunks(self, filename):
-        fl = self.access_filesystem(filename)
+    def send_chunks(self, fl):
         ch = [chunks[cid] for cid in fl['content']]
         js = json.dumps(ch)
         result = f"{len(js)}\n{js}\n"
@@ -259,7 +258,10 @@ class ClientListener(Thread):
             else:
                 self.sock.sendall("No storate servers found\n".encode())
         elif comm == 'read':
-            self.send_chunks(recv_word(self.sock))
+            filename = recv_word(self.sock)
+            fl = self.access_filesystem(filename)
+            self.sock.sendall(str(fl['size']).encode())
+            self.send_chunks(fl)
         elif comm == 'ls':
             filename = recv_word(self.sock)
             fs = self.access_filesystem(filename, False)

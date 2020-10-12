@@ -34,20 +34,19 @@ def recv_stream(sock, length):
 
 
 def send_chank_to_dn(dn_ip, chank: str, version: int, deleted: bool, content: bytes, port=8803):
-    print(dn_ip, chank, version)
     with socket.socket() as s:
         s.connect((dn_ip, port))
         d = {True: 't', False: 'f'}
         s.sendall(
             f'write\n{chank}\n{version}\n{d[deleted]}\n{len(content)}\n'.encode('UTF-8'))
         res = recv_word(s)
-        if (res != b'ACK'):
+        if (res != 'ACK'):
             print('fatal after sending params: ', res)
             return res
         if (not deleted):
             s.sendall(content)
         res = recv_word(s)
-        if (res != b'ACK'):
+        if (res != 'ACK'):
             print('fatal during sending/deleting file: ', res)
             return res
 
@@ -57,7 +56,7 @@ def read_chank_from_dn(dn_ip, chank: str, version: int, port=8803):
         s.connect((dn_ip, port))
         s.sendall(f'read\n{chank}\n{version}\n'.encode('UTF-8'))
         res = recv_word(s)
-        if (res != b'ACK'):
+        if (res != 'ACK'):
             print('fatal after sending params: ', res)
             return res
         return s.recv(CHUNK_SIZE)
@@ -77,7 +76,7 @@ while 1:
         filesize = os.path.getsize(filename)
         argc = [action, filename, filesize]
     else:
-        argc = argc[2:]
+        argc = argc[1:]
         if action == 'ls' and len(argc) < 2:
             argc.append("")
 
@@ -100,12 +99,16 @@ while 1:
                 else:
                     content = f.read(CHUNK_SIZE)
 
-                send_chank_to_dn(random.choice(
-                    chunk['ips']), chunk['id'], chunk['ver'], chunk['del'], content)
+                dip = random.choice(chunk['ips'])
+                print(dip)
+                send_chank_to_dn(
+                    dip, chunk['id'], chunk['ver'], chunk['del'], content)
 
                 progress.update(len(content))
     elif action == 'read':
-        chunks = recv_stream(sock, int(received))
+        filesize = int(received)
+        jlen = received = recv_word(sock)
+        chunks = recv_stream(sock, jlen)
         chunks = json.loads(chunks)
 
         progress = tqdm.tqdm(range(

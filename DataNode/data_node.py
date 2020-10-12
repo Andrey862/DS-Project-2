@@ -46,7 +46,7 @@ class NS():
     @classmethod
     def send_update(cls, chank, version):
         print('sent ', f'upd\n{chank.decode()}\n{version}\n'.encode())
-        s.sendall(f'upd\n{chank.decode()}\n{version}\n'.encode())
+        cls.con.sendall(f'upd\n{chank.decode()}\n{version}\n'.encode())
 
     @classmethod
     def listen_for_updates(cls):
@@ -62,7 +62,7 @@ class NS():
 
 class ContentTable():
     content_table__ = {}
-    BACKUP_PATH = '__files__/backup.json'
+    BACKUP_PATH = '__files__/DN_backup.json'
 
     @classmethod
     def get_all(cls):
@@ -164,7 +164,7 @@ def save_to_disk_and_tables(sock: socket.socket, chank: bytes, version: str, del
     NS.send_update(chank, version)
 
 
-def recv_word(sock, split=b'\n', max_len=30, check_dead=False):
+def recv_word(sock, split=b'\n', max_len=256, check_dead=False):
     word = b""
     dead = False
     for _ in range(max_len):
@@ -188,11 +188,12 @@ class BackupDaemon(Thread):
         print('Started Backup demon')
         while True:
             try:
+                time.sleep(BACKUP_PERIOD)
                 with open(ContentTable.BACKUP_PATH, 'w') as f:
                     f.write(ContentTable.to_json())
                 print("Content table backup performed")
-                time.sleep(BACKUP_PERIOD)
-            except Exception as e:
+                
+            except Exception as e: 
                 print(f'Error during content table backup: {repr(e)}')
 
 
@@ -239,8 +240,8 @@ class ClientServer(Thread):
         try:
             self.serve()
         except Exception as e:
-            self.sock.sendall(b'Error! ' + repr(e).encode('UTF-8')+b'\n')
             print('error during serving client', e)
+            #self.sock.sendall(b'Error! ' + repr(e).encode('UTF-8')+b'\n')
         self.sock.close()
         print(f'serverd client {self.addr}')
 
