@@ -20,7 +20,11 @@ class NS():
 
     @classmethod
     def connect(cls):
-        NS_ip = os.environ['NN']
+        try:
+            NS_ip = os.environ['NN']
+        except Exception:
+            print('ns ip = 127.0.0.1')
+            NS_ip = '127.0.0.1'
         print("NS ip is ", NS_ip)
         #NS_ip = '127.0.0.1'
         s = socket.socket()
@@ -330,7 +334,9 @@ class DNPusher(Thread):
 
     def request_content_table(self, sock: socket.socket):
         sock.sendall(b'ct\n')
-        length = int(recv_word(sock).decode())
+        length = recv_word(sock).decode()
+        print('length: ', length)
+        length = int(length)
         content = b''
         part = b' '
         while(len(content) < length and part != b''):
