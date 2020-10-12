@@ -2,21 +2,38 @@ import socket
 from threading import Condition, Thread
 import time
 import json
+import tqdm
 import os
 import sys
+import random
 
 
-def recv_word(sock):
+def recv_word(sock, split=b'\n', max_len=256, check_dead=False):
     word = b""
-    for _ in range(20):
+    dead = False
+    for _ in range(max_len):
         rcv = sock.recv(1)
-        if rcv == b'\n':
+        if rcv == b'':
+            dead = True
+        if rcv == split:
             break
         word += rcv
-    return word
+    if (check_dead):
+        return word.decode(), dead
+    else:
+        return word.decode()
 
 
-def send_chank_to_dn(dn_ip, chank, version, deleted, content, port=10005):
+def recv_stream(sock, length):
+    content = b''
+    part = b' '
+    while (len(content) < length and part != b''):
+        part = sock.recv(CHUNK_SIZE)
+        content += part
+    return content.decode()
+
+
+def send_chank_to_dn(dn_ip, chank, version, deleted, content, port=8803):
     with socket.socket() as s:
         s.connect((dn_ip, port))
         d = {True: 't', False: 'f'}
@@ -34,7 +51,7 @@ def send_chank_to_dn(dn_ip, chank, version, deleted, content, port=10005):
             return res
 
 
-def read_chank_from_dn(dn_ip, chank, version, port=10005):
+def read_chank_from_dn(dn_ip, chank, version, port=8803):
     with socket.socket() as s:
         s.connect((dn_ip, port))
         s.sendall(f'read\n{chank}\n{version}\n'.encode('UTF-8'))
@@ -68,7 +85,26 @@ while 1:
     send = '\n'.join(argc) + '\n'
     sock.send(send.encode())
 
-    received = sock.recv(CHUNK_SIZE).decode()
-    print(received)
+    received = recv_word(sock)
+
+    if action == 'write':
+        chunks = recv_stream(sock, int(received))
+        chunks = json.loads(chunks)
+
+        progress = tqdm.tqdm(range(
+            filesize), f"Sending {filename}...", unit="B", unit_scale=True, unit_divisor=1024)
+        with open(filename, 'rb') as f:
+            for chunk in chunks:
+                if chunk['del']:
+                    content = b''
+                else:
+                    content = f.read(CHUNK_SIZE)
+
+                send_chank_to_dn(random.choice(
+                    chunk['ips']), chunk['id'], chunk['ver'], chunk['del'], content)
+
+                progress.update(len(content))
+    else:
+        print(received)
 
     sock.close()

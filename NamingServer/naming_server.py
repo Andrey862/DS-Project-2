@@ -64,8 +64,9 @@ class BackupDaemon(Thread):
             f.write(json.dumps(chunks, indent=4))
 
     def run(self):
+        global storage_servers
         while 1:
-            time.sleep(3)
+            time.sleep(1)
             self.backup()
 
 
@@ -107,6 +108,7 @@ class StorageServerListener(Thread):
         self.sock.sendall(('\n'.join(addr) + '\n').encode())
 
     def conn(self):
+        global storage_servers
         if len(storage_servers) == 0:
             i = 0
             storage_servers.append(self)
@@ -176,7 +178,7 @@ class ClientListener(Thread):
                     continue
                 else:
                     return None
-            if not f in fs['content']:
+            if f not in fs['content']:
                 if add_missing:
                     fs['content'][f] = {
                         "type": "folder", "name": f, "..": fs, "content": {}}
@@ -208,15 +210,18 @@ class ClientListener(Thread):
 
                 fl['content'].append(chunk_id)
                 chunks[chunk_id] = {
-                    "id": chunk_id, "ips": [addr], "ver": 0, "del": False
+                    "id": chunk_id, "ips": [addr], "ver": 1, "del": False
                 }
         elif N < M:
             for cid in fl['content'][N:]:
                 chunks[cid]['del'] = True
                 chunks[cid]['ver'] += 1
 
-        self.sock.sendall(json.dumps(
-            fl['content'], indent=4).encode())
+        pairs = [chunks[cid] for cid in fl['content']]
+        js = json.dumps(pairs)
+        result = f"{len(js)}\n{js}\n"
+        print(result)
+        self.sock.sendall(result.encode())
 
     def delete(self, filename):
         if filename['type'] == 'file':
@@ -241,6 +246,7 @@ class ClientListener(Thread):
 
     def run(self):
         global current_folder
+        global storage_servers
         comm = recv_word(self.sock)
         if comm == 'write':
             if len(storage_servers):
