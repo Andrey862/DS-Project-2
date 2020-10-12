@@ -65,16 +65,16 @@ class StorageServerListener(Thread):
         self.sock.close()
 
     def get_adjancet_addresses(self, i):
-        addr = ""
+        addr = []
         ln = len(storage_servers)
         if i == 0:
-            addr += storage_servers[ln - 1] + '\n'
+            addr.append(storage_servers[ln - 1])
         else:
-            addr += storage_servers[i - 1] + '\n'
+            addr.append(storage_servers[i - 1])
         if i == ln - 1:
-            addr += storage_servers[0] + '\n'
+            addr.append(storage_servers[0])
         else:
-            addr += storage_servers[i + 1] + '\n'
+            addr.append(storage_servers[i + 1])
         return addr
 
     def conn(self):
@@ -87,7 +87,8 @@ class StorageServerListener(Thread):
             i = random.randrange(len(storage_servers))
             storage_servers.insert(i, self.addr)
         addr = self.get_adjancet_addresses(i)
-        self.sock.sendall(addr.encode())
+        addr = [a.split(':')[0] for a in addr]
+        self.sock.sendall('\n'.join(addr).encode())
 
     def run(self):
         args = self.sock.recv(CHUNK_SIZE).decode().split("\n")
