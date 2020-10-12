@@ -112,7 +112,7 @@ while 1:
         chunks = recv_stream(sock, jlen)
         chunks = json.loads(chunks)
         ###
-        filename = argc[2]
+        filename = argc[1]
         ###
         progress = tqdm.tqdm(range(
             filesize), f"Receiving {filename}...", unit="B", unit_scale=True, unit_divisor=1024)
