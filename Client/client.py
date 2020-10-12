@@ -57,9 +57,15 @@ socket.connect((ip, port))
 if action == 'write':
     filename = sys.argv[4]
     filesize = os.path.getsize(filename)
-    socket.send(f"{action}?{filename}?{filesize}".encode())
+    argc = [action, filename, filesize]
 else:
-    socket.send('?'.join(sys.argv[3:]).encode())
+    argc = sys.argv[3:]
+    if action == 'ls' and len(argc) < 3:
+        argc.append("")
+
+argc = [str(a) for a in argc]
+send = '\n'.join(argc) + '\n'
+socket.send(send.encode())
 
 received = socket.recv(CHUNK_SIZE).decode()
 print(received)
