@@ -3,7 +3,6 @@ from threading import Condition, Thread
 import time
 import json
 import os
-import tqdm
 import sys
 
 
@@ -48,41 +47,28 @@ def read_chank_from_dn(dn_ip, chank, version, port=10005):
 
 CHUNK_SIZE = 4096
 
-ip, port, action = sys.argv[1:4]
-port = int(port)
+while 1:
+    argc = input().split(' ')
+    ip, port, action = argc[0:3]
+    port = int(port)
 
-socket = socket.socket()
-socket.connect((ip, port))
+    socket = socket.socket()
+    socket.connect((ip, port))
 
-if action == 'write':
-    filename = sys.argv[4]
-    filesize = os.path.getsize(filename)
-    argc = [action, filename, filesize]
-else:
-    argc = sys.argv[3:]
-    if action == 'ls' and len(argc) < 3:
-        argc.append("")
+    if action == 'write':
+        filename = argc[3]
+        filesize = os.path.getsize(filename)
+        argc = [action, filename, filesize]
+    else:
+        argc = argc[2:]
+        if action == 'ls' and len(argc) < 3:
+            argc.append("")
 
-argc = [str(a) for a in argc]
-send = '\n'.join(argc) + '\n'
-socket.send(send.encode())
+    argc = [str(a) for a in argc]
+    send = '\n'.join(argc) + '\n'
+    socket.send(send.encode())
 
-received = socket.recv(CHUNK_SIZE).decode()
-print(received)
+    received = socket.recv(CHUNK_SIZE).decode()
+    print(received)
 
-
-# progress = tqdm.tqdm(range(
-#     filesize), f"Sending {filename}...", unit="B", unit_scale=True, unit_divisor=1024)
-
-
-# with open(filename, "rb") as file:
-#     while True:
-#         content = file.read(1024)
-#         if not content:
-#             break
-
-#         socket.sendall(content)
-#         progress.update(len(content))
-
-socket.close()
-# print("Successfully sent.")
+    socket.close()

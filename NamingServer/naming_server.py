@@ -2,7 +2,6 @@ import os
 import copy
 import time
 import math
-import tqdm
 import socket
 import random
 import uuid
@@ -97,7 +96,7 @@ class StorageServerListener(Thread):
         i = storage_servers.index(self)
         srvr = self.get_adjacent_servers(i)
         addr = [s.addr.split(':')[0] for s in srvr]
-        self.sock.sendall('\n'.join(addr).encode())
+        self.sock.sendall('\n'.join(addr) + '\n'.encode())
 
     def conn(self):
         if len(storage_servers) == 0:
