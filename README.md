@@ -8,15 +8,18 @@
 git clone https://github.com/Andrey862/DS-Project-2 <br/>
 cd Client
 <br/>
+
 python client.py
 ## Client commands
-NS_ip 8800 ls .
-NS_ip 8800 mkdir Foder_name
-NS_ip 8800 rm File_name
-NS_ip 8800 rm Folder_name
-NS_ip 8800 write File_name
-NS_ip 8800 ls . -r
-
+```
+<NS_ip> ls .
+<NS_ip> mkdir Foder_name
+<NS_ip> rm File_name
+<NS_ip> rm Folder_name
+<NS_ip> write File_name
+<NS_ip> read File_name
+<NS_ip> ls . -r
+```
 
 ## Architecture
 ![Architecture](./img/DS_P2.jpg)
