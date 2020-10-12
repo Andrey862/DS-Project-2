@@ -21,20 +21,26 @@ class NS():
     @classmethod
     def connect(cls):
         NS_ip = os.environ['NN']
+        print("NS ip is ", NS_ip)
+        #NS_ip = '127.0.0.1'
         s = socket.socket()
         s.connect((NS_ip, NS_PORT))
         s.sendall(b'conn\n')
+        print('sent conn')
         cls.prev_ip, cls.next_ip = recv_word(s), recv_word(s)
+        print('ips ', cls.prev_ip, cls.next_ip)
         return None
 
     @classmethod
     def get_ips(cls):
-        return cls.prev_ip, cls.next_ip
+        return cls.prev_ip.decode(), cls.next_ip.decode()
+
         # return [input("prev_ip\n"), input("next_ip\n")]
 
     @classmethod
     def send_update(cls, chank, version):
-        s.sendall(f'upd\n{chank.decode()}\n{version}\n')
+        print('sent ', f'upd\n{chank.decode()}\n{version}\n'.encode())
+        s.sendall(f'upd\n{chank.decode()}\n{version}\n'.encode())
 
     @classmethod
     def listen_for_updates(cls, chank, version):
