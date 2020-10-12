@@ -103,14 +103,14 @@ class StorageServerListener(Thread):
     def ping_adjacent(self):
         i = storage_servers.index(self)
         srvr = self.get_adjacent_servers(i)
-        addr = [s.addr.split(':')[0] for s in srvr]
+        addr = [s.addr for s in srvr]
         self.sock.sendall(('\n'.join(addr) + '\n').encode())
 
     def conn(self):
         if len(storage_servers) == 0:
             i = 0
             storage_servers.append(self)
-        elif self.addr in storage_servers:
+        elif self in storage_servers:
             i = storage_servers.index(self)
         else:
             i = random.randrange(len(storage_servers))
@@ -131,7 +131,8 @@ class StorageServerListener(Thread):
                 elif comm == 'upd':
                     cid = recv_word(self.sock)
                     ver = int(recv_word(self.sock))
-                    chunks[cid]['ips'].append(self.addr)
+                    if self.addr not in chunks[cid]['ips']:
+                        chunks[cid]['ips'].append(self.addr)
                     chunks[cid]['ver'] = max(ver, chunks[cid]['ver'])
         except:
             pass
@@ -147,15 +148,6 @@ class ClientListener(Thread):
 
     def close(self):
         self.sock.close()
-
-    # def handle_filename_collision(self, fs, filename):
-    #     base, ext = os.path.splitext(os.path.basename(filename))
-    #     result = base + ext
-    #     i = 0
-    #     while result in fs['contents']:
-    #         i += 1
-    #         result = f'{base}_{i}{ext}'
-    #     return result
 
     def split_path(self, path):
         folders = []
@@ -212,11 +204,11 @@ class ClientListener(Thread):
         if N > M:
             for _ in range(N - M):
                 chunk_id = str(uuid.uuid4())
-                storage_server = random.choice(storage_servers)
+                addr = random.choice(storage_servers).addr
 
                 fl['content'].append(chunk_id)
                 chunks[chunk_id] = {
-                    "id": chunk_id, "ips": [storage_server], "ver": 1, "del": False
+                    "id": chunk_id, "ips": [addr], "ver": 0, "del": False
                 }
         elif N < M:
             for cid in fl['content'][N:]:
@@ -295,7 +287,7 @@ class PortListener(Thread):
     def run(self):
         while 1:
             conn, addr = self.sock.accept()
-            addr = f'{addr[0]}:{addr[1]}'
+            addr = addr[0]
             self.obj(conn, addr).start()
 
 
