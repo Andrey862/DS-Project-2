@@ -13,7 +13,6 @@ CHUNK_SIZE = 4096
 
 storage_servers = []
 
-
 filesystem = {'type': 'folder', 'name': 'root', 'content': {}}
 chunks = {}
 current_folder = filesystem
@@ -62,9 +61,10 @@ class StorageServerListener(Thread):
         self.addr = addr
 
     def close(self):
+        storage_servers.remove(self)
         self.sock.close()
 
-    def get_adjancet_addresses(self, i):
+    def get_adjacent_servers(self, i):
         addr = []
         ln = len(storage_servers)
         if i == 0:
@@ -77,28 +77,39 @@ class StorageServerListener(Thread):
             addr.append(storage_servers[i + 1])
         return addr
 
+    def ping_adjacent(self):
+        i = storage_servers.index(self)
+        srvr = self.get_adjacent_servers(i)
+        addr = [s.addr.split(':')[0] for s in srvr]
+        self.sock.sendall('\n'.join(addr).encode())
+
     def conn(self):
         if len(storage_servers) == 0:
             i = 0
-            storage_servers.append(self.addr)
-        if self.addr in storage_servers:
-            i = storage_servers.index(self.addr)
+            storage_servers.append(self)
+        elif self.addr in storage_servers:
+            i = storage_servers.index(self)
         else:
             i = random.randrange(len(storage_servers))
-            storage_servers.insert(i, self.addr)
-        addr = self.get_adjancet_addresses(i)
-        addr = [a.split(':')[0] for a in addr]
-        self.sock.sendall('\n'.join(addr).encode())
+            storage_servers.insert(i, self)
+
+        self.ping_adjacent()
+        prev = (i - 1) % len(storage_servers)
+        storage_servers[prev].ping_adjacent()
+        next = (i + 1) % len(storage_servers)
+        storage_servers[next].ping_adjacent()
 
     def run(self):
-        args = self.sock.recv(CHUNK_SIZE).decode().split("\n")
-        if args[0] == 'conn':
-            self.conn()
-        elif args[0] == 'upd':
-            cid = args[1]
-            ver = int(args[2])
-            chunks[cid]['ips'].append(self.addr)
-            chunks[cid]['ver'] = max(ver, chunks[cid]['ver'])
+        while 1:
+            args = self.sock.recv(CHUNK_SIZE).decode().split("\n")
+            if args[0] == 'conn':
+                self.conn()
+            elif args[0] == 'upd':
+                cid = args[1]
+                ver = int(args[2])
+                chunks[cid]['ips'].append(self.addr)
+                chunks[cid]['ver'] = max(ver, chunks[cid]['ver'])
+
         self.close()
 
 
