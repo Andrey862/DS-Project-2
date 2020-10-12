@@ -59,7 +59,7 @@ def read_chank_from_dn(dn_ip, chank, version, port=8803):
         if (res != b'ACK'):
             print('fatal after sending params: ', res)
             return res
-        return s.recv(5000)
+        return s.recv(CHUNK_SIZE)
 
 
 CHUNK_SIZE = 4096
@@ -103,6 +103,22 @@ while 1:
                 send_chank_to_dn(random.choice(
                     chunk['ips']), chunk['id'], chunk['ver'], chunk['del'], content)
 
+                progress.update(len(content))
+    elif action == 'read':
+        chunks = recv_stream(sock, int(received))
+        chunks = json.loads(chunks)
+
+        progress = tqdm.tqdm(range(
+            filesize), f"Receiving {filename}...", unit="B", unit_scale=True, unit_divisor=1024)
+        with open(filename, 'wb') as f:
+            for chunk in chunks:
+                if chunk['del']:
+                    content = b''
+                else:
+                    content = read_chank_from_dn(random.choice(
+                        chunk['ips']), chunk['id'], chunk['ver'])
+
+                f.write(content)
                 progress.update(len(content))
     else:
         print(received)

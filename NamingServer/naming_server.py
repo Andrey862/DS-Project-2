@@ -197,8 +197,8 @@ class ClientListener(Thread):
             fl['size'] = filesize
             fl['content'] = []
 
-        N = math.ceil(filesize / CHUNK_SIZE)
         M = len(fl['content'])
+        N = math.ceil(filesize / CHUNK_SIZE)
 
         for cid in fl['content'][:min(N, M)]:
             chunks[cid]['ver'] += 1
@@ -217,11 +217,7 @@ class ClientListener(Thread):
                 chunks[cid]['del'] = True
                 chunks[cid]['ver'] += 1
 
-        pairs = [chunks[cid] for cid in fl['content']]
-        js = json.dumps(pairs)
-        result = f"{len(js)}\n{js}\n"
-        print(result)
-        self.sock.sendall(result.encode())
+        self.send_chunks(filename)
 
     def delete(self, filename):
         if filename['type'] == 'file':
@@ -244,6 +240,13 @@ class ClientListener(Thread):
                 ls += self.ls(fs['content'][k], rec, tab + 1)
         return ls
 
+    def send_chunks(self, filename):
+        fl = self.access_filesystem(filename)
+        ch = [chunks[cid] for cid in fl['content']]
+        js = json.dumps(ch)
+        result = f"{len(js)}\n{js}\n"
+        self.sock.sendall(result.encode())
+
     def run(self):
         global current_folder
         global storage_servers
@@ -255,6 +258,8 @@ class ClientListener(Thread):
                 self.write(filename, filesize)
             else:
                 self.sock.sendall("No storate servers found\n".encode())
+        elif comm == 'read':
+            self.send_chunks(recv_word(self.sock))
         elif comm == 'ls':
             filename = recv_word(self.sock)
             fs = self.access_filesystem(filename, False)
