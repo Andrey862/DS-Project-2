@@ -117,12 +117,12 @@ class StorageServerListener(Thread):
 
     def run(self):
         while 1:
-            args = self.sock.recv(CHUNK_SIZE).decode().split("\n")
-            if args[0] == 'conn':
+            comm = recv_word(self.sock)
+            if comm == 'conn':
                 self.conn()
-            elif args[0] == 'upd':
-                cid = args[1]
-                ver = int(args[2])
+            elif comm == 'upd':
+                cid = recv_word(self.sock)
+                ver = int(recv_word(self.sock))
                 chunks[cid]['ips'].append(self.addr)
                 chunks[cid]['ver'] = max(ver, chunks[cid]['ver'])
 
