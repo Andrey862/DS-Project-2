@@ -87,6 +87,7 @@ while 1:
     received = recv_word(sock)
 
     if action == 'write':
+        recv_word(sock)
         chunks = recv_stream(sock, int(received))
         chunks = json.loads(chunks)
 
@@ -107,7 +108,7 @@ while 1:
                 progress.update(len(content))
     elif action == 'read':
         filesize = int(received)
-        jlen = received = recv_word(sock)
+        jlen = int(recv_word(sock))
         chunks = recv_stream(sock, jlen)
         chunks = json.loads(chunks)
 

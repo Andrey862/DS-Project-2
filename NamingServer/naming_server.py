@@ -243,7 +243,7 @@ class ClientListener(Thread):
     def send_chunks(self, fl):
         ch = [chunks[cid] for cid in fl['content']]
         js = json.dumps(ch)
-        result = f"{len(js)}\n{js}\n"
+        result = f"{fl['size']}\n{len(js)}\n{js}\n"
         self.sock.sendall(result.encode())
 
     def run(self):
@@ -260,7 +260,6 @@ class ClientListener(Thread):
         elif comm == 'read':
             filename = recv_word(self.sock)
             fl = self.access_filesystem(filename)
-            self.sock.sendall(str(fl['size']).encode())
             self.send_chunks(fl)
         elif comm == 'ls':
             filename = recv_word(self.sock)
