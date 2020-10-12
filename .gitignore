@@ -3,5 +3,3 @@ venv/
 __pycache__/
 __files__/
 .ipynb_checkpoints/
-
-/backup
