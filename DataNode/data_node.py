@@ -30,6 +30,10 @@ class NS():
     def send_update(cls, chank, version):
         pass
 
+    @classmethod
+    def listen_for_updates(cls, chank, version):
+        pass
+
 
 class ContentTable():
     content_table__ = {}
@@ -266,7 +270,7 @@ class DNListener(Thread):
                     save_to_disk_and_tables(
                         sock, chank, version, deleted, length)
             elif (command == b'ct'):
-                ct = ContentTable.to_json
+                ct = ContentTable.to_json()
                 sock.sendall(f'{len(ct)}\n{ct}'.encode())
                 res = recv_word(sock)
                 if (res != b'ACK'):
@@ -290,10 +294,20 @@ class DNListener(Thread):
                 print('Accept PrevDNListener')
                 con.settimeout(120.0)
                 self.action(con, addr)
+                con.close()
                 sock.close()
             except Exception as e:
                 print(f'Error! Restarting DN Listener: {e}')
                 time.sleep(0.5)
+            finally:
+                try:
+                    con.close()
+                except Exception:
+                    pass
+                try:
+                    sock.close()
+                except Exception:
+                    pass
 
 
 class DNPusher(Thread):
@@ -303,16 +317,17 @@ class DNPusher(Thread):
 
     def request_content_table(self, sock: socket.socket):
         sock.sendall(b'ct\n')
-        length = recv_word(sock)
+        length = int(recv_word(sock).decode())
         content = b''
         part = b' '
         while(len(content) < length and part != b''):
             part = sock.recv(1024)
             content += part
         sock.sendall(b'ACK\n')
-        table = json.loads(content)
+        print('recived ct: ', content)
+        table = json.loads(content.decode())
         for row in ContentTable.get_all():
-            if row['chank'] not in table or table[row['chank']] < row['ver']:
+            if row['chank'] not in table or table[row['chank'].decode()] < row['ver']:
                 NextDN.add(row['chank'])
 
     def action(self,  sock: socket.socket, ip):
