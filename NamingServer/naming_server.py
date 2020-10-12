@@ -18,6 +18,22 @@ chunks = {}
 current_folder = filesystem
 
 
+def recv_word(sock, split=b'\n', max_len=256, check_dead=False):
+    word = b""
+    dead = False
+    for _ in range(max_len):
+        rcv = sock.recv(1)
+        if rcv == b'':
+            dead = True
+        if rcv == split:
+            break
+        word += rcv
+    if (check_dead):
+        return word.decode(), dead
+    else:
+        return word.decode()
+
+
 class BackupDaemon(Thread):
     def get_path(self):
         path = 'backup\\'
@@ -223,31 +239,39 @@ class ClientListener(Thread):
 
     def run(self):
         global current_folder
-        args = self.sock.recv(CHUNK_SIZE).decode().split("?")
-        if args[0] == 'write':
-            self.write(args[1], int(args[2]))
-        elif args[0] == 'ls':
-            fs = self.access_filesystem(args[1], False)
-            if fs:
-                ls = self.ls(fs, len(args) > 2)
+        comm = recv_word(self.sock)
+        if comm == 'write':
+            if len(storage_servers):
+                filename = recv_word(self.sock)
+                filesize = int(recv_word(self.sock))
+                self.write(filename, filesize)
             else:
-                ls = "Directory not found"
+                self.sock.sendall("No storate servers found\n".encode())
+        elif comm == 'ls':
+            filename = recv_word(self.sock)
+            fs = self.access_filesystem(filename, False)
+            if fs:
+                rec = bool(recv_word(self.sock))
+                ls = self.ls(fs, rec)
+            else:
+                ls = "Directory not found\n"
             self.sock.sendall(ls.encode())
-        elif args[0] == 'cd':
-            fs = self.access_filesystem(args[1], False)
+        elif comm == 'cd':
+            fs = self.access_filesystem(recv_word(self.sock), False)
             if fs:
                 current_folder = fs
             else:
-                self.sock.sendall("Directory not found".encode())
-        elif args[0] == 'mkdir':
-            self.access_filesystem(args[1])
-        elif args[0] == 'rm':
-            fs = self.access_filesystem(args[1])
+                self.sock.sendall("Directory not found\n".encode())
+        elif comm == 'mkdir':
+            filename = recv_word(self.sock)
+            self.access_filesystem(filename)
+        elif comm == 'rm':
+            fs = self.access_filesystem(recv_word(self.sock))
             if fs:
                 self.delete(fs)
                 del fs['..']['content'][fs['name']]
             else:
-                self.sock.sendall("Directory not found".encode())
+                self.sock.sendall("Directory not found\n".encode())
 
         self.close()
 

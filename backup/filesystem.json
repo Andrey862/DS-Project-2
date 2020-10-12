@@ -1,5 +1,12 @@
 {
     "type": "folder",
     "name": "root",
-    "content": {}
+    "content": {
+        "README.md": {
+            "type": "file",
+            "name": "README.md",
+            "content": [],
+            "size": 248174
+        }
+    }
 }
