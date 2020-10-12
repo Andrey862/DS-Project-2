@@ -2,7 +2,6 @@ import os
 import copy
 import time
 import math
-import tqdm
 import socket
 import random
 import uuid

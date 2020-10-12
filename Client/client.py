@@ -3,7 +3,6 @@ from threading import Condition, Thread
 import time
 import json
 import os
-import tqdm
 import sys
 
 
