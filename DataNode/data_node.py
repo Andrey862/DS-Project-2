@@ -11,7 +11,7 @@ from typing import List
 DN_CLIENT_PORT = 8803
 DN_DN_PORT = 8804
 NS_PORT = 8801
-BACKUP_PERIOD = 90
+BACKUP_PERIOD = 3
 
 
 class NS():

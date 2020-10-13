@@ -45,11 +45,11 @@ class BackupDaemon(Thread):
             for name in list(directory['content'].keys()):
                 self.remove_circular_reference(directory['content'][name])
 
-    def restore_circilar_reference(self, directory):
-        if directory['type'] != 'file':
-            for name in list(directory['content'].keys()):
-                directory['content'][name]['..'] = directory
-                self.restore_circilar_reference(directory['content'][name])
+    def restore_circular_reference(self, directory):
+        for name in list(directory['content'].keys()):
+            directory['content'][name]['..'] = directory
+            if directory['content'][name]['type'] != 'file':
+                self.restore_circular_reference(directory['content'][name])
 
     def backup_filesystem(self):
         path = self.get_path()
@@ -64,11 +64,35 @@ class BackupDaemon(Thread):
         with open(path + "chunks.json", "w") as file:
             file.write(json.dumps(chunks, indent=4))
 
+    def restore_backup(self):
+        global chunks
+        global filesystem
+        path = self.get_path()
+
+        try:
+            with open(path + "chunks.json", "r") as file:
+                chunks = json.loads(file.read())
+            print("Restored chunks")
+        except Exception:
+            chunks = {}
+            print("Chunks backup not found")
+
+        try:
+            with open(path + "filesystem.json", "r") as file:
+                filesystem = json.loads(file.read())
+                self.restore_circular_reference(filesystem)
+            print("Restored filesystem")
+        except Exception:
+            filesystem = {'type': 'folder', 'name': 'root', 'content': {}}
+            print("Filesystem backup not found")
+
     def run(self):
+        self.restore_backup()
         while 1:
-            time.sleep(1)
+            time.sleep(3)
             self.backup_filesystem()
             self.backup_chunks()
+            print("Backup complete")
 
 
 class StorageServerListener(Thread):
@@ -138,7 +162,7 @@ class StorageServerListener(Thread):
                         chunks[cid]['ips'].append(self.addr)
                     chunks[cid]['ver'] = max(ver, chunks[cid]['ver'])
         except Exception as e:
-            print(repr(e))
+            print("Error at DataNodeListener: " + repr(e))
 
         self.close()
 
@@ -290,7 +314,7 @@ class ClientListener(Thread):
                 print("handling action at " + self.directory['name'])
                 self.read_action(action)
         except Exception as e:
-            print(repr(e))
+            print("Error at ClientListener: " + repr(e))
 
         self.close()
 
