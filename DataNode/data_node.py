@@ -366,7 +366,7 @@ class DNPusher(Thread):
             chank = NextDN.get()
             if (chank == None):
                 #print(f'pushing heart to {ip}')
-                print(f'nothing to push to {ip}, sleep 10sec')
+                #print(f'nothing to push to {ip}, sleep 10sec')
                 # sock.sendall(b'heart\n')
                 time.sleep(10)
                 continue

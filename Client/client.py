@@ -64,38 +64,36 @@ def read_chank_from_dn(dn_ip, chank: str, version: int, port=8803):
 
 CHUNK_SIZE = 4096
 
+ip = input("Input ip:\n")
+sock = socket.socket()
+sock.connect((ip, 8800))
+print("Connected\n")
+
 while 1:
-    argc = input().split(' ')
-    ip, action = argc[0:2]
+    args = input().split(' ')
 
-    sock = socket.socket()
-    sock.connect((ip, 8800))
-
-    if action == 'exit':
-        sock.send(action.encode())
+    if args[0] == 'exit':
+        sock.send(args[0].encode())
         break
 
-    if action == 'write':
-        filename = argc[2]
+    if args[0] == 'write':
+        filename = args[1]
         filesize = os.path.getsize(filename)
-        argc = [action, filename, filesize]
+        args = [args[0], filename, str(filesize)]
     else:
-        argc = argc[1:]
-        if action == 'ls' and len(argc) < 3:
-            argc.append("")
+        if args[0] == 'ls' and len(args) < 3:
+            args.append("")
 
-    argc = [str(a) for a in argc]
-    send = '\n'.join(argc) + '\n'
+    send = '\n'.join(args) + '\n'
     sock.send(send.encode())
     received = recv_word(sock)
 
-    if action == 'write':
+    if args[0] == 'write':
         recv_word(sock)
         chunks = recv_stream(sock, int(received))
         chunks = json.loads(chunks)
 
-        progress = tqdm.tqdm(range(
-            filesize), f"Sending {filename}...", unit="B", unit_scale=True, unit_divisor=1024)
+        print(f"Sending {filename}...")
         with open(filename, 'rb') as f:
             for chunk in chunks:
                 if chunk['del']:
@@ -106,16 +104,15 @@ while 1:
                 dip = random.choice(chunk['ips'])
                 send_chank_to_dn(
                     dip, chunk['id'], chunk['ver'], chunk['del'], content)
-
-                progress.update(len(content))
-    elif action == 'read':
+        print(f"Sent {filename}")
+    elif args[0] == 'read':
         filesize = int(received)
         jlen = int(recv_word(sock))
         chunks = recv_stream(sock, jlen)
         chunks = json.loads(chunks)
-        filename = argc[1]
-        progress = tqdm.tqdm(range(
-            filesize), f"Receiving {filename}...", unit="B", unit_scale=True, unit_divisor=1024)
+        filename = args[1]
+
+        print(f"Receiving {filename}...")
         with open(filename, 'wb') as f:
             for chunk in chunks:
                 if chunk['del']:
@@ -125,8 +122,8 @@ while 1:
                         chunk['ips']), chunk['id'], chunk['ver'])
 
                 f.write(content)
-                progress.update(len(content))
-    elif action == 'ls':
+        print(f"Received {filename}")
+    elif args[0] == 'ls':
         ls = recv_stream(sock, int(received))
         print(ls)
     else:

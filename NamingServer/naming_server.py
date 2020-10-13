@@ -285,8 +285,9 @@ class ClientListener(Thread):
         try:
             while 1:
                 action = recv_word(self.sock)
-                if action == 'exit':
+                if action == 'exit' or not action:
                     break
+                print("handling action at " + self.directory['name'])
                 self.read_action(action)
         except Exception as e:
             print(repr(e))
