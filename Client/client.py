@@ -79,7 +79,6 @@ while 1:
         argc = argc[1:]
         if action == 'ls' and len(argc) < 3:
             argc.append("")
-        print(argc)
 
     argc = [str(a) for a in argc]
     send = '\n'.join(argc) + '\n'
@@ -102,7 +101,6 @@ while 1:
                     content = f.read(CHUNK_SIZE)
 
                 dip = random.choice(chunk['ips'])
-                print(dip)
                 send_chank_to_dn(
                     dip, chunk['id'], chunk['ver'], chunk['del'], content)
 
