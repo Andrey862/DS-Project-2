@@ -71,6 +71,10 @@ while 1:
     sock = socket.socket()
     sock.connect((ip, 8800))
 
+    if action == 'exit':
+        sock.send(action.encode())
+        break
+
     if action == 'write':
         filename = argc[2]
         filesize = os.path.getsize(filename)
@@ -129,4 +133,5 @@ while 1:
     else:
         print(received)
 
-    sock.close()
+
+sock.close()

@@ -11,8 +11,8 @@ from threading import Thread
 CHUNK_SIZE = 4096
 
 storage_servers = []
-clients = []
 chunks = {}
+filesystem = {'type': 'folder', 'name': 'root', 'content': {}}
 
 
 def recv_word(sock, split=b'\n', max_len=256, check_dead=False):
@@ -34,12 +34,8 @@ def recv_word(sock, split=b'\n', max_len=256, check_dead=False):
 class BackupDaemon(Thread):
     def get_path(self, sub=""):
         path = "backup\\"
-        if sub:
-            path += sub + "\\"
-
         if not os.path.exists(path):
             os.mkdir(path)
-
         return path
 
     def remove_circular_reference(self, directory):
@@ -55,13 +51,13 @@ class BackupDaemon(Thread):
                 directory['content'][name]['..'] = directory
                 self.restore_circilar_reference(directory['content'][name])
 
-    def backup_client(self, client):
-        path = self.get_path(client.addr)
+    def backup_filesystem(self):
+        path = self.get_path()
 
         with open(path + "filesystem.json", "w") as file:
-            filesystem = copy.deepcopy(client.filesystem)
-            self.remove_circular_reference(filesystem)
-            file.write(json.dumps(filesystem, indent=4))
+            filesystem_ = copy.deepcopy(filesystem)
+            self.remove_circular_reference(filesystem_)
+            file.write(json.dumps(filesystem_, indent=4))
 
     def backup_chunks(self):
         path = self.get_path()
@@ -71,9 +67,8 @@ class BackupDaemon(Thread):
     def run(self):
         while 1:
             time.sleep(1)
+            self.backup_filesystem()
             self.backup_chunks()
-            for client in clients:
-                self.backup_client(client)
 
 
 class StorageServerListener(Thread):
@@ -154,20 +149,16 @@ class ClientListener(Thread):
 
         self.sock = sock
         self.addr = addr
-        self.filesystem = {'type': 'folder', 'name': 'root', 'content': {}}
-        self.current_directory = self.filesystem
-
-        clients.append(self)
+        self.directory = filesystem
 
     def close(self):
-        clients.remove(self)
         self.sock.close()
 
     def open_directory(self, path, add_missing=True):
-        directory = self.current_directory
+        directory = self.directory
         path = path.split('/')
 
-        for child in directory:
+        for child in path:
             if child == '.':
                 continue
             if child == '..':
@@ -215,7 +206,7 @@ class ClientListener(Thread):
                 chunks[chunk_id]['del'] = True
                 chunks[chunk_id]['ver'] += 1
 
-        self.send_chunks(file)
+        return file
 
     def delete(self, filename):
         if filename['type'] == 'file':
@@ -247,13 +238,13 @@ class ClientListener(Thread):
         response = f"{file['size']}\n{len(text)}\n{text}\n"
         self.sock.sendall(response.encode())
 
-    def run(self):
-        action = recv_word(self.sock)
+    def read_action(self, action):
         if action == 'write':
             if len(storage_servers):
                 filename = recv_word(self.sock)
                 filesize = int(recv_word(self.sock))
-                self.write(filename, filesize)
+                file = self.write(filename, filesize)
+                self.send_chunks(file)
             else:
                 self.sock.sendall("No storate servers found\n".encode())
         elif action == 'read':
@@ -268,21 +259,38 @@ class ClientListener(Thread):
                 directory, recursive) if directory else "Directory not found\n"
             self.sock.sendall(f"{len(result)}\n{result}".encode())
         elif action == 'cd':
-            directory = self.open_directory(recv_word(self.sock), False)
+            path = recv_word(self.sock)
+            directory = self.open_directory(path, False)
             if directory:
-                self.current_directory = directory
+                self.directory = directory
+                self.sock.sendall(
+                    f"Currently at {self.directory['name']}\n".encode())
             else:
                 self.sock.sendall("Directory not found\n".encode())
         elif action == 'mkdir':
             filename = recv_word(self.sock)
             self.open_directory(filename)
+            self.sock.sendall(f"Succesfully deleted".encode())
         elif action == 'rm':
             directory = self.open_directory(recv_word(self.sock))
             if directory:
                 self.delete(directory)
-                del directory['..']['content'][directory['name']]
+                name = directory['name']
+                del directory['..']['content'][name]
+                self.sock.sendall(f"Deleted {name}\n".encode())
             else:
                 self.sock.sendall("Directory not found\n".encode())
+
+    def run(self):
+        try:
+            while 1:
+                action = recv_word(self.sock)
+                if action == 'exit':
+                    break
+                self.read_action(action)
+        except Exception as e:
+            print(repr(e))
+
         self.close()
 
 
