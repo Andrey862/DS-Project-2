@@ -79,6 +79,7 @@ while 1:
         argc = argc[1:]
         if action == 'ls' and len(argc) < 3:
             argc.append("")
+        print(argc)
 
     argc = [str(a) for a in argc]
     send = '\n'.join(argc) + '\n'
@@ -111,9 +112,7 @@ while 1:
         jlen = int(recv_word(sock))
         chunks = recv_stream(sock, jlen)
         chunks = json.loads(chunks)
-        ###
         filename = argc[1]
-        ###
         progress = tqdm.tqdm(range(
             filesize), f"Receiving {filename}...", unit="B", unit_scale=True, unit_divisor=1024)
         with open(filename, 'wb') as f:
@@ -126,6 +125,9 @@ while 1:
 
                 f.write(content)
                 progress.update(len(content))
+    elif action == 'ls':
+        ls = recv_stream(sock, int(received))
+        print(ls)
     else:
         print(received)
 

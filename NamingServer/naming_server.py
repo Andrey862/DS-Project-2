@@ -151,23 +151,9 @@ class ClientListener(Thread):
     def close(self):
         self.sock.close()
 
-    def split_path(self, path):
-        folders = []
-        while 1:
-            path, folder = os.path.split(path)
-            if folder != "":
-                folders.append(folder)
-            else:
-                if path != "":
-                    folders.append(path)
-                break
-
-        folders.reverse()
-        return folders
-
     def access_filesystem(self, path, add_missing=True):
         fs = current_folder
-        folders = self.split_path(path)
+        folders = path.split('/')
 
         for f in folders:
             if f == '.':
@@ -266,10 +252,10 @@ class ClientListener(Thread):
             fs = self.access_filesystem(filename, False)
             if fs:
                 rec = bool(recv_word(self.sock))
-                ls = self.ls(fs, rec)
+                ls = self.ls(fs, bool(rec))
             else:
                 ls = "Directory not found\n"
-            self.sock.sendall(ls.encode())
+            self.sock.sendall(f"{len(ls)}\n{ls}".encode())
         elif comm == 'cd':
             fs = self.access_filesystem(recv_word(self.sock), False)
             if fs:
