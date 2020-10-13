@@ -11,6 +11,7 @@ from threading import Thread
 CHUNK_SIZE = 4096
 
 storage_servers = []
+clients = []
 
 filesystem = {'type': 'folder', 'name': 'root', 'content': {}}
 chunks = {}
@@ -291,13 +292,14 @@ class PortListener(Thread):
 
 def main():
     BackupDaemon().start()
+    conn_types = ((8800, ClientListener), (8801, StorageServerListener))
 
-    for t in ((8800, ClientListener), (8801, StorageServerListener)):
+    for (port, obj) in conn_types:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(('', t[0]))
+        sock.bind(('', port))
         sock.listen()
-        PortListener(sock, t[1]).start()
+        PortListener(sock, obj).start()
 
 
 if __name__ == "__main__":
