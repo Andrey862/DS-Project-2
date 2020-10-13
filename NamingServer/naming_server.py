@@ -12,10 +12,7 @@ CHUNK_SIZE = 4096
 
 storage_servers = []
 clients = []
-
-filesystem = {'type': 'folder', 'name': 'root', 'content': {}}
 chunks = {}
-current_folder = filesystem
 
 
 def recv_word(sock, split=b'\n', max_len=256, check_dead=False):
@@ -35,40 +32,44 @@ def recv_word(sock, split=b'\n', max_len=256, check_dead=False):
 
 
 class BackupDaemon(Thread):
-    def get_path(self):
-        path = 'backup\\'
+    def get_path(self, addr=""):
+        path = 'backup\\'+addr
         if not os.path.exists(path):
             os.mkdir(path)
         return path
 
-    def remove_circular_reference(self, fs):
-        if '..' in fs:
-            del fs['..']
-        if fs['type'] != 'file':
-            for k in list(fs['content'].keys()):
-                self.remove_circular_reference(fs['content'][k])
+    def remove_circular_reference(self, directory):
+        if '..' in directory:
+            del directory['..']
+        if directory['type'] != 'file':
+            for name in list(directory['content'].keys()):
+                self.remove_circular_reference(directory['content'][name])
 
-    def restore_circilar_reference(self, fs):
-        if fs['type'] != 'file':
-            for k in list(fs['content'].keys()):
-                fs['content'][k]['..'] = fs
-                self.restore_circilar_reference(fs['content'][k])
+    def restore_circilar_reference(self, directory):
+        if directory['type'] != 'file':
+            for name in list(directory['content'].keys()):
+                directory['content'][name]['..'] = directory
+                self.restore_circilar_reference(directory['content'][name])
 
-    def backup(self):
+    def backup_client(self, client):
+        path = self.get_path(client.addr)
+
+        with open(path + "filesystem.json", "w") as file:
+            filesystem = copy.deepcopy(client.filesystem)
+            self.remove_circular_reference(filesystem)
+            file.write(json.dumps(filesystem, indent=4))
+
+    def backup_chunks(self):
         path = self.get_path()
-
-        with open(path + "filesystem.json", "w") as f:
-            fs = copy.deepcopy(filesystem)
-            self.remove_circular_reference(fs)
-            f.write(json.dumps(fs, indent=4))
-        with open(path + "chunks.json", "w") as f:
-            f.write(json.dumps(chunks, indent=4))
+        with open(path + "chunks.json", "w") as file:
+            file.write(json.dumps(chunks, indent=4))
 
     def run(self):
-        global storage_servers
         while 1:
             time.sleep(1)
-            self.backup()
+            self.backup_chunks()
+            for client in clients:
+                self.backup_client(client)
 
 
 class StorageServerListener(Thread):
@@ -146,73 +147,79 @@ class StorageServerListener(Thread):
 class ClientListener(Thread):
     def __init__(self, sock, addr):
         super().__init__(daemon=True)
+
         self.sock = sock
         self.addr = addr
+        self.filesystem = {'type': 'folder', 'name': 'root', 'content': {}}
+        self.current_directory = self.filesystem
+
+        clients.append(self)
 
     def close(self):
+        clients.remove(self)
         self.sock.close()
 
-    def access_filesystem(self, path, add_missing=True):
-        fs = current_folder
-        folders = path.split('/')
+    def open_directory(self, path, add_missing=True):
+        directory = self.current_folder
+        path = path.split('/')
 
-        for f in folders:
-            if f == '.':
+        for child in directory:
+            if child == '.':
                 continue
-            if f == '..':
-                if '..' in fs:
-                    fs = fs['..']
+            if child == '..':
+                if '..' in directory:
+                    directory = directory['..']
                     continue
                 else:
                     return None
-            if fs['type'] == 'file':
+            if directory['type'] == 'file':
                 break
-            if f not in fs['content']:
+            if child not in directory['content']:
                 if add_missing:
-                    fs['content'][f] = {
-                        "type": "folder", "name": f, "..": fs, "content": {}}
+                    directory['content'][child] = {
+                        "type": "folder", "name": child, "..": directory, "content": {}}
                 else:
                     return None
-            fs = fs['content'][f]
+            directory = directory['content'][child]
 
-        return fs
+        return directory
 
     def write(self, filename, filesize):
-        fl = self.access_filesystem(filename)
-        if fl['type'] != 'file':
-            fl['type'] = 'file'
-            fl['size'] = filesize
-            fl['content'] = []
+        file = self.open_directory(filename)
+        if file['type'] != 'file':
+            file['type'] = 'file'
+            file['size'] = filesize
+            file['content'] = []
 
-        M = len(fl['content'])
+        M = len(file['content'])
         N = math.ceil(filesize / CHUNK_SIZE)
 
-        for cid in fl['content'][:min(N, M)]:
-            chunks[cid]['ver'] += 1
+        for chunk_id in file['content'][:min(N, M)]:
+            chunks[chunk_id]['ver'] += 1
 
         if N > M:
             for _ in range(N - M):
                 chunk_id = str(uuid.uuid4())
                 addr = random.choice(storage_servers).addr
 
-                fl['content'].append(chunk_id)
+                file['content'].append(chunk_id)
                 chunks[chunk_id] = {
                     "id": chunk_id, "ips": [addr], "ver": 1, "del": False
                 }
         elif N < M:
-            for cid in fl['content'][N:]:
-                chunks[cid]['del'] = True
-                chunks[cid]['ver'] += 1
+            for chunk_id in file['content'][N:]:
+                chunks[chunk_id]['del'] = True
+                chunks[chunk_id]['ver'] += 1
 
-        self.send_chunks(fl)
+        self.send_chunks(file)
 
     def delete(self, filename):
         if filename['type'] == 'file':
-            for cid in filename['content']:
-                chunks[cid]['del'] = True
+            for chunk_id in filename['content']:
+                chunks[chunk_id]['del'] = True
         else:
-            for k in list(filename['content'].keys()):
-                self.delete(filename['content'][k])
+            for name in list(filename['content'].keys()):
+                self.delete(filename['content'][name])
 
     def ls(self, directory, recursive=False, tab_level=0):
         result = ""
@@ -230,48 +237,46 @@ class ClientListener(Thread):
                                   recursive, tab_level + 1)
         return result
 
-    def send_chunks(self, fl):
-        ch = [chunks[cid] for cid in fl['content']]
-        js = json.dumps(ch)
-        result = f"{fl['size']}\n{len(js)}\n{js}\n"
-        self.sock.sendall(result.encode())
+    def send_chunks(self, file):
+        contents = [chunks[cid] for cid in file['content']]
+        text = json.dumps(contents)
+        response = f"{file['size']}\n{len(text)}\n{text}\n"
+        self.sock.sendall(response.encode())
 
     def run(self):
-        global current_folder
-        global storage_servers
-        comm = recv_word(self.sock)
-        if comm == 'write':
+        action = recv_word(self.sock)
+        if action == 'write':
             if len(storage_servers):
                 filename = recv_word(self.sock)
                 filesize = int(recv_word(self.sock))
                 self.write(filename, filesize)
             else:
                 self.sock.sendall("No storate servers found\n".encode())
-        elif comm == 'read':
+        elif action == 'read':
             filename = recv_word(self.sock)
-            fl = self.access_filesystem(filename)
-            self.send_chunks(fl)
-        elif comm == 'ls':
+            file = self.open_directory(filename)
+            self.send_chunks(file)
+        elif action == 'ls':
             filename = recv_word(self.sock)
-            directory = self.access_filesystem(filename, False)
+            directory = self.open_directory(filename, False)
             recursive = bool(recv_word(self.sock))
             result = self.ls(
                 directory, recursive) if directory else "Directory not found\n"
             self.sock.sendall(f"{len(result)}\n{result}".encode())
-        elif comm == 'cd':
-            fs = self.access_filesystem(recv_word(self.sock), False)
-            if fs:
-                current_folder = fs
+        elif action == 'cd':
+            directory = self.open_directory(recv_word(self.sock), False)
+            if directory:
+                self.current_folder = directory
             else:
                 self.sock.sendall("Directory not found\n".encode())
-        elif comm == 'mkdir':
+        elif action == 'mkdir':
             filename = recv_word(self.sock)
-            self.access_filesystem(filename)
-        elif comm == 'rm':
-            fs = self.access_filesystem(recv_word(self.sock))
-            if fs:
-                self.delete(fs)
-                del fs['..']['content'][fs['name']]
+            self.open_directory(filename)
+        elif action == 'rm':
+            directory = self.open_directory(recv_word(self.sock))
+            if directory:
+                self.delete(directory)
+                del directory['..']['content'][directory['name']]
             else:
                 self.sock.sendall("Directory not found\n".encode())
         self.close()
