@@ -270,7 +270,7 @@ class ClientListener(Thread):
         elif action == 'mkdir':
             filename = recv_word(self.sock)
             self.open_directory(filename)
-            self.sock.sendall(f"Succesfully deleted".encode())
+            self.sock.sendall(f"Created {filename}\n".encode())
         elif action == 'rm':
             directory = self.open_directory(recv_word(self.sock))
             if directory:

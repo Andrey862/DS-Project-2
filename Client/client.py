@@ -87,7 +87,6 @@ while 1:
     argc = [str(a) for a in argc]
     send = '\n'.join(argc) + '\n'
     sock.send(send.encode())
-
     received = recv_word(sock)
 
     if action == 'write':
