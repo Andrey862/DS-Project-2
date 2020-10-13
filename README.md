@@ -9,8 +9,8 @@ git clone https://github.com/Andrey862/DS-Project-2 <br/>
 cd Client <br/>
 python client.py
 ## Client commands
+(!) Before entering commands you should enter ip of Name Server
 ```
-<NS_ip>
 ls .
 mkdir Foder_name
 rm File_name
