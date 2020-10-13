@@ -213,18 +213,21 @@ class ClientListener(Thread):
             for k in list(filename['content'].keys()):
                 self.delete(filename['content'][k])
 
-    def ls(self, fs, rec=False, tab=0):
-        ls = ""
-        for k in list(fs['content'].keys()):
-            ls = '-' * tab + ' ' if tab else ''
-            ls += k
-            if fs['content'][k]['type'] == 'file':
-                ls += f" : {str(fs['content'][k]['size'])}b"
-            ls += '\n'
+    def ls(self, directory, recursive=False, tab_level=0):
+        result = ""
+        for name in list(directory['content'].keys()):
+            if tab_level:
+                result += '-' * tab_level + ' '
 
-            if rec and fs['content'][k]['type'] == 'folder':
-                ls += self.ls(fs['content'][k], rec, tab + 1)
-        return ls
+            result += name
+            if directory['content'][name]['type'] == 'file':
+                result += f" : {directory['content'][name]['size']} bytes"
+            result += '\n'
+
+            if recursive and directory['content'][name]['type'] == 'folder':
+                result += self.ls(directory['content'][name],
+                                  recursive, tab_level + 1)
+        return result
 
     def send_chunks(self, fl):
         ch = [chunks[cid] for cid in fl['content']]
@@ -249,13 +252,11 @@ class ClientListener(Thread):
             self.send_chunks(fl)
         elif comm == 'ls':
             filename = recv_word(self.sock)
-            fs = self.access_filesystem(filename, False)
-            if fs:
-                rec = bool(recv_word(self.sock))
-                ls = self.ls(fs, bool(rec))
-            else:
-                ls = "Directory not found\n"
-            self.sock.sendall(f"{len(ls)}\n{ls}".encode())
+            directory = self.access_filesystem(filename, False)
+            recursive = bool(recv_word(self.sock))
+            result = self.ls(
+                directory, recursive) if directory else "Directory not found\n"
+            self.sock.sendall(f"{len(result)}\n{result}".encode())
         elif comm == 'cd':
             fs = self.access_filesystem(recv_word(self.sock), False)
             if fs:
@@ -272,7 +273,6 @@ class ClientListener(Thread):
                 del fs['..']['content'][fs['name']]
             else:
                 self.sock.sendall("Directory not found\n".encode())
-
         self.close()
 
 
