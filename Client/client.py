@@ -77,7 +77,7 @@ while 1:
         argc = [action, filename, filesize]
     else:
         argc = argc[1:]
-        if action == 'ls' and len(argc) < 2:
+        if action == 'ls' and len(argc) < 3:
             argc.append("")
 
     argc = [str(a) for a in argc]
