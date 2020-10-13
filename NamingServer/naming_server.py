@@ -32,10 +32,14 @@ def recv_word(sock, split=b'\n', max_len=256, check_dead=False):
 
 
 class BackupDaemon(Thread):
-    def get_path(self, addr=""):
-        path = 'backup\\'+addr
+    def get_path(self, sub=""):
+        path = "backup\\"
+        if sub:
+            path += sub + "\\"
+
         if not os.path.exists(path):
             os.mkdir(path)
+
         return path
 
     def remove_circular_reference(self, directory):
@@ -160,7 +164,7 @@ class ClientListener(Thread):
         self.sock.close()
 
     def open_directory(self, path, add_missing=True):
-        directory = self.current_folder
+        directory = self.current_directory
         path = path.split('/')
 
         for child in directory:
@@ -266,7 +270,7 @@ class ClientListener(Thread):
         elif action == 'cd':
             directory = self.open_directory(recv_word(self.sock), False)
             if directory:
-                self.current_folder = directory
+                self.current_directory = directory
             else:
                 self.sock.sendall("Directory not found\n".encode())
         elif action == 'mkdir':
